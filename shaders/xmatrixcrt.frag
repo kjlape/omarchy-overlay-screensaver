@@ -19,9 +19,9 @@
 //
 //  pre  (top of main): the surface is mapped onto a 4:3 picture tube —
 //                      fitted to the screen height, centered, padded, rounded
-//                      corners — then barrel-curvature + H-sync wobble bend
-//                      the glyph lattice inside it; points outside the tube
-//                      land on the bezel.
+//                      corners — then barrel curvature bends the glyph
+//                      lattice inside it; points outside the tube land on
+//                      the bezel.
 //  post (end of main): aperture-grille RGB mask (vertical phosphor
 //                      stripes), scanlines at a fixed line count, vignette
 //                      (corner falloff of a curved tube), a heavily
@@ -31,7 +31,8 @@
 //                      plastic — the monitor chassis lit only by the
 //                      raster's own spill: brightens toward the glass, a
 //                      thin recess shadow at the edge, faint molded grain,
-//                      and the same hum flicker as the tube.
+//                      and the same hum flicker as the tube. Fully opaque:
+//                      no glyph content is ever composited onto it.
 //
 // Everything between pre and post is identical to xmatrix.frag — if the
 // engine changes there, either mirror it here or accept that this is a
@@ -112,7 +113,6 @@ layout(std140, binding = 0) uniform buf {
 #define CRT_PAD       0.035  // padding around the tube (fraction of height)
 #define CRT_ROUND     0.12   // tube corner rounding (tube-local units)
 #define CRT_CURVE     0.045  // barrel strength (0 = flat panel)
-#define CRT_WOBBLE    0.0022 // horizontal sync wobble amplitude (uv units)
 #define CRT_SCANLINES 750.0  // scanline count over the tube height
 #define CRT_SCAN_W    0.42   // scanline darkening depth (0..1)
 #define CRT_MASK      1800.0 // aperture-grille stripes across the tube width
@@ -124,16 +124,15 @@ layout(std140, binding = 0) uniform buf {
 #define CRT_BEZEL_LIT 2.3    // plastic brightening at the raster edge (x)
 #define CRT_BEZEL_FALL 26.0  // phosphor spill falloff (per tube-local unit)
 #define CRT_BEZEL_EDGE 0.42  // recess shadow depth right at the glass edge
-#define CRT_BEZEL_SPILL 0.12 // moving phosphor light landing on the plastic
 
 // Maps the surface onto a 4:3 picture tube fitted to the screen height and
 // centered (letterboxed with CRT_PAD on wide screens), with rounded corners
-// and a gentle barrel bulge + H-sync wobble. Everything outside the tube is
-// bezel: crtIn = 0 there and the caller renders black. Returns the
-// tube-local uv in [0,1] that the xmatrix grid should sample at.
+// and a gentle barrel bulge. Everything outside the tube is bezel: crtIn = 0
+// there and the caller composites the bezel color. Returns the tube-local uv
+// in [0,1] that the xmatrix grid should sample at.
 float crtIn;   // 1 inside the raster, 0 on the bezel
 float crtSd;   // signed distance to the glass edge (negative inside, tube-local)
-vec2 crtMap(vec2 uv, float t)
+vec2 crtMap(vec2 uv)
 {
     // physical coords centered on the surface, height = 1
     vec2 c = (uv - 0.5) * vec2(aspect, 1.0);
@@ -148,8 +147,6 @@ vec2 crtMap(vec2 uv, float t)
     crtSd = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - CRT_ROUND;
     crtIn = 1.0 - smoothstep(-0.004, 0.004, crtSd);
 
-    // sync wobble: slow sine plus a faster ripple, like a drifting H-sync
-    p.x += CRT_WOBBLE * (sin(t * 2.1) + 0.4 * sin(t * 23.7)) / hw;
     float r2 = dot(p, p);
     p *= 1.0 + CRT_CURVE * r2;                 // gentle barrel bulge
     crtIn *= step(abs(p.x), 1.0) * step(abs(p.y), 1.0);
@@ -237,9 +234,9 @@ float glyphCov(uvec2 bits, vec2 f, float radius)
 
 void main()
 {
-    // CRT pre-stage: sample the glyph engine at a barrel-curved, wobbling
-    // coordinate; anything outside the raster is bezel-black.
-    vec2 uv = crtMap(qt_TexCoord0, time);
+    // CRT pre-stage: sample the glyph engine at a barrel-curved coordinate;
+    // anything outside the raster lands on the bezel.
+    vec2 uv = crtMap(qt_TexCoord0);
     float cols = ROWS * aspect * CELL_AR;
     vec2 g = uv * vec2(cols, ROWS);
     ivec2 cell = ivec2(floor(g));
@@ -359,9 +356,6 @@ void main()
                * mix(1.0, CRT_BEZEL_LIT, spill)
                * mix(vec3(1.0), vec3(0.94, 1.03, 0.62), spill)
                * edge;
-    // heads sweeping past the outer rows throw a little moving light on it
-    bezel += CRT_BEZEL_SPILL * spill * clamp(col, 0.0, 1.0);
-
     // Mains-hum flicker: a fast ~100 Hz-ish beat plus a slow brightness
     // wander, both heavily attenuated so it reads as a tube, not a strobe.
     // The bezel breathes with it — its only light source is the tube.
