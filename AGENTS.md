@@ -19,6 +19,10 @@ MVP — manual show/hide, no idle trigger.
    (no z-order in Hyprland window rules, fullscreen is workspace-local, no
    Wayland surface reparenting). Read before proposing "simpler" approaches.
 3. **[docs/quickref.md](docs/quickref.md)** — one-page summary of the above.
+4. **[docs/troubleshooting.md](docs/troubleshooting.md)** — read when the
+   CLI says `IPC call failed` / `Target not found`: where the shell's logs
+   really live, the FINAL-property gotcha, stale hot-reload compiles, and
+   the diagnostic ladder.
 
 ## Key files
 
@@ -64,7 +68,13 @@ omarchy-shell shell rescanPlugins         # force-reload if hot-reload didn't ta
 QML edits hot-reload on save when installed under `~/.config/omarchy/plugins/`.
 Test recovery paths explicitly before committing: `hide`, `kill`, Escape,
 click. Plugin `console.log` output lands in the shell's journal
-(`journalctl --user -u omarchy-shell`).
+(`journalctl --user -u "wayland-wm@hyprland.desktop.service"` — not
+`-u omarchy-shell`, which doesn't exist on Omarchy 4; see
+docs/troubleshooting.md).
+
+State flags must never shadow final QML properties (`visible`, `anchors`,
+…); the overlay's flag is `overlayVisible` for that reason — renaming it
+back breaks the whole component load.
 
 Do not edit anything under `/usr/share/omarchy/` — read it freely, never
 write it. User config lives in `~/.config/omarchy/`.

@@ -47,3 +47,14 @@ Use `Quickshell.Settings.idle.screensaver` (seconds since idle) or `Quickshell.H
 
 ## See full analysis
 `analysis.md` for complete details on why, how, and what to watch for.
+
+## Troubleshooting quick hits
+- `Target not found` ⇒ Service.qml failed to compile; check
+  `journalctl --user -u "wayland-wm@hyprland.desktop.service" | grep "plugin load failed"`
+- `omarchy plugin list` shows config state, not load state — "enabled" ≠ loaded
+- Never shadow final QML properties (`visible`!) on the root Item — use `overlayVisible`
+- Installed copy may be a clone, not a symlink: edits in `~/dev` don't hot-reload
+- Hot-reload can serve a stale broken compile → `omarchy restart shell` (always safe; overlay starts hidden)
+- IPC exits 0 on failure — check the result string, not the exit code
+
+See `troubleshooting.md` for the full diagnostic ladder.

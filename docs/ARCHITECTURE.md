@@ -193,5 +193,7 @@ omarchy-overlay-screensaver hide
 omarchy-overlay-screensaver kill
 ```
 
-Debugging: plugin `console.log` lines go to the shell's stdout/stderr —
-`journalctl --user -u omarchy-shell` (or wherever your shell logs land).
+Debugging: plugin `console.log` lines go to the shell's stdout/stderr. On
+Omarchy 4 the shell runs under the uwsm compositor unit, so read them from
+`journalctl --user -u "wayland-wm@hyprland.desktop.service"` — see
+[troubleshooting.md](troubleshooting.md) for the full diagnostic ladder.
