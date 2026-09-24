@@ -11,7 +11,7 @@ The "run all 270 hacks" moonshot via Xvfb is tracked separately under `moonshots
 ## Status
 
 - [x] Phase 0: porting recipe established (`starnest`)
-- [~] Phase 1: xscreensaver `glx/glsl/` collection (32 programs, 38 files — verified against local 6.16 tree). In progress: 6/32 ported (`starnest`, `universeball`, `topologica`, `synthwavecity`, `downfall`, `trizm`). The `universeball` port also landed the multi-shader API — `showShader(name, source)`, `shader [NAME]` / `shaders` CLI verbs — so future ports need no Service.qml changes beyond a `knownShaders` entry.
+- [~] Phase 1: xscreensaver `glx/glsl/` collection (32 programs, 38 files — verified against local 6.16 tree). In progress: 7/32 ported (`starnest`, `universeball`, `topologica`, `synthwavecity`, `downfall`, `trizm`, `hexplasma`). The `universeball` port also landed the multi-shader API — `showShader(name, source)`, `shader [NAME]` / `shaders` CLI verbs — so future ports need no Service.qml changes beyond a `knownShaders` entry.
 - [] Phase 2: curated shadertoy.com picks (30–50 programs)
 - [ ] Phase 3: config + UX integration
 - [ ] Phase 4: tooling (batch conversion, shader gallery)
@@ -60,7 +60,7 @@ All files are single-pass `mainImage` shaders unless noted. Verified from the lo
 | 5 | `bubblecolors.glsl` | Bubble Colors | Matt Vianueva (license **unverified** — no statement in file) | 23 lines | 🔴 High |
 | 6 | `downfall.glsl` | Downfall | Matt Vianueva (MIT, relicensed) | 35 lines | ✅ Done |
 | 7 | `trizm.glsl` | Trizm | Matt Vianueva (MIT, relicensed) | ✅ Done — 64 lines; per-pixel start-distance dither re-based on converted uv (no pixel-resolution uniform); `o *= i` golf dropped | ✅ Done |
-| 8 | `hexplasma.glsl` | Hex Plasma | Nemerix (MIT) | 57 lines | 🔴 High |
+| 8 | `hexplasma.glsl` | Hex Plasma | Nemerix (MIT) | 57 lines | ✅ Done — cleanest port yet: no `iMouse`, no textures, `res.y`-normalized coordinate family (universeball conversion block verbatim); only edits were the uniform block, `iTime` → `time`, and the y flip |
 | 9 | `rigrekt.glsl` | Rigrekt | Matt Vianueva (MIT, relicensed) | 61 lines | 🟡 Medium |
 | 10 | `batteredplanet.glsl` | Battered Planet | mrange (CC0) | 355 lines, raymarched | 🟡 Medium |
 | 11 | `goldenapollian.glsl` | Golden Apollian | mrange (CC0) | 383 lines | 🟡 Medium |
@@ -198,6 +198,14 @@ Hard-won, in rough order of when they bite:
    freezing. Mark each substitution inline with the `// jwz: was … —
    mouse dropped` convention so the diff against upstream stays
    reviewable (see `shaders/topologica.frag` for the pattern).
+12. **Ports with no `iMouse`/textures/multi-pass are near-copy-paste.**
+   `hexplasma` (the 7th port) needed only: paste the body, replace
+   `mainImage` with `main`, swap in the standard uniform block, apply the
+   universeball conversion block (it's the `res.y`-normalized family),
+   rename `iTime` → `time`, and bake. Budget ~10 minutes for this class;
+   GLSL 440 built-ins the sources use (`tanh`, `smoothstep`, `mat2`) all
+   work unmodified under `qsb`. Check a source against the roadmap table's
+   Notes column first to know which class you're in.
 12. **Bake immediately after writing the GLSL.** `qsb` catches syntax
     typos (a stray `1.0_`) in seconds — far cheaper than discovering them
     after a shell restart + auto-hide test cycle. Treat
