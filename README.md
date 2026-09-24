@@ -140,6 +140,11 @@ unknown names are rejected without showing anything. Current ports:
   hand-drawn 5×7 katakana-ish glyphs (the upstream glyph bitmaps are
   license-ambiguous, so none are shipped or sampled). See
   [docs/roadmap.md](docs/roadmap.md#non-glsl-sources-phase-1b-reimplementations-from-the-c-hacks).
+- **xmatrixcrt** *(experimental fork)* — the same xmatrix engine dressed as a
+  90s CRT: barrel curvature + H-sync wobble on the grid, phosphor glow,
+  aperture-grille mask, scanlines, vignette, and mains-hum flicker. All
+  constants are in the `CRT-TUNING` block of `shaders/xmatrixcrt.frag`;
+  the glyph engine is a frozen copy of `xmatrix.frag`.
 
 GLSL sources live in `shaders/`; the baked `.qsb` files are rebuilt with
 `/usr/lib/qt6/bin/qsb --glsl "100,120,150,330,440" <in> -o <in>.qsb`.
