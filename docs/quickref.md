@@ -53,7 +53,9 @@ Use `Quickshell.Settings.idle.screensaver` (seconds since idle) or `Quickshell.H
   `journalctl --user -u "wayland-wm@hyprland.desktop.service" | grep "plugin load failed"`
 - `omarchy plugin list` shows config state, not load state — "enabled" ≠ loaded
 - Never shadow final QML properties (`visible`!) on the root Item — use `overlayVisible`
-- Installed copy may be a clone, not a symlink: edits in `~/dev` don't hot-reload
+- Installed copy is a git clone with a `file://` origin pointing at the dev
+  repo — after editing in `~/dev`, commit there, then `git pull` in the
+  installed clone so QML edits land (pull without a prior commit does nothing)
 - Hot-reload can serve a stale broken compile → `omarchy restart shell` (always safe; overlay starts hidden)
 - IPC exits 0 on failure — check the result string, not the exit code
 

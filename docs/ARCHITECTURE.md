@@ -180,8 +180,25 @@ is making the call work from **ssh and other non-login environments**:
 
 ## Dev loop
 
+**Recommended: a `file://` git remote.** The installed plugin at
+`~/.config/omarchy/plugins/<id>/` is a real git clone, so point its `origin`
+at the dev checkout — local dev then mimics a real remote with
+`commit && push && pull`, and this is the most likely setup a dev will use:
+
 ```bash
-# edit code directly in the installed location, or:
+git -C ~/.config/omarchy/plugins/kjlape.overlay-screensaver \
+    remote add origin file://"$HOME"/dev/kjlape/omarchy-overlay-screensaver
+# after committing in the dev checkout, pull in the installed clone:
+git -C ~/.config/omarchy/plugins/kjlape.overlay-screensaver pull
+```
+
+Note: `git push` to the checked-out branch of a non-bare repo fails by
+default. Simplest daily loop: commit in `~/dev/...`, then `git pull` in the
+installed clone.
+
+Alternative: edit code directly in the installed location, or symlink:
+
+```bash
 ln -s ~/dev/kjlape/omarchy-overlay-screensaver \
       ~/.config/omarchy/plugins/kjlape.overlay-screensaver
 omarchy plugin enable kjlape.overlay-screensaver

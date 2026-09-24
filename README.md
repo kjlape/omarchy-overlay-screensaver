@@ -61,6 +61,12 @@ omarchy plugin add https://github.com/kjlape/omarchy-overlay-screensaver.git --e
 manifest, registers the service in `~/.config/omarchy/shell.json`, and the
 shell hot-reloads. Force a reload if needed with `omarchy restart shell`.
 
+For local development the clone's `origin` can simply point at the dev
+checkout with a `file://` URL (`git -C ~/.config/omarchy/plugins/<id> remote
+add origin file://$HOME/dev/kjlape/omarchy-overlay-screensaver`); commit in
+the dev repo, `git pull` in the installed clone, and QML edits hot-reload.
+Force a reload if needed with `omarchy restart shell`.
+
 Uninstall: `./uninstall.sh` + `omarchy plugin remove kjlape.overlay-screensaver`.
 
 ## Config (optional)
