@@ -45,7 +45,7 @@ The "run all 270 hacks" moonshot via Xvfb is tracked separately under `moonshots
 
 ## Phase 1: xscreensaver `glx/glsl/` Collection (32 programs)
 
-These ship with xscreensaver at `hacks/glx/glsl/` — **verified against the local 6.16 tree at `/home/kjlape/dev/xscreensaver/xscreensaver-6.16`** (38 `.glsl` files: some hacks are multi-pass). They are the **safest** starting point — already vetted and, in most cases, explicitly licensed by the upstream shadertoy authors.
+These are vendored in-repo at `vendor/xscreensaver/hacks/glx/glsl/` (copied from the xscreensaver 6.16 tree — 38 `.glsl` files: some hacks are multi-pass; provenance and license matrix in `vendor/xscreensaver/README.md`). They are the **safest** starting point — already vetted and, in most cases, explicitly licensed by the upstream shadertoy authors.
 
 ### Target programs
 
@@ -86,7 +86,7 @@ All files are single-pass `mainImage` shaders unless noted. Verified from the lo
 | 31 | `bestill0-0.glsl` … `bestill5-0.glsl` | Bestill | Matt Vianueva (MIT, relicensed) | **6-pass** — needs multi-`ShaderEffect` chain; largest single effort | 🟢 Lower |
 | 32 | `amigajuggler.glsl` | Amiga Juggler | Brian Bernstein, written for xscreensaver (license: xscreensaver's, effectively GPL — **verify before porting**) | 479 lines, single self-contained `mainImage` (the other `mainImage` match is a comment), procedural ray tracer | 🟢 Lower |
 
-### Verified-facts summary (2026 check against 6.16 tree)
+### Verified-facts summary (2026 check against 6.16 tree, now vendored)
 
 - **Count**: 38 `.glsl` files / 32 distinct programs under `hacks/glx/glsl/`.
 - **Multi-pass** (filename pattern `<pass>` or `N-M.glsl`): `bestill` (6 passes), `neongravity` (2 passes). Everything else is single-pass.
@@ -97,11 +97,11 @@ All files are single-pass `mainImage` shaders unless noted. Verified from the lo
 
 ### Per-program task checklist
 
-For each of the remaining 31 programs (source is already local at
-`/home/kjlape/dev/xscreensaver/xscreensaver-6.16/hacks/glx/glsl/<name>.glsl`):
+For each of the remaining 31 programs (vendored at
+`vendor/xscreensaver/hacks/glx/glsl/<name>.glsl`):
 
 ```
-[ ] 1. Copy the GLSL source from the local 6.16 tree
+[ ] 1. Copy the GLSL source from the vendored xscreensaver 6.16 tree
 [ ] 2. Create shaders/<name>.vert (qt_TexCoord0 passthrough)
 [ ] 3. Port shaders/<name>.frag:
        - Rename iTime → time
