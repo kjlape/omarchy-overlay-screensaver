@@ -51,7 +51,7 @@ ARCHITECTURE.md first.
 | `manifest.json` | Plugin identity `kjlape.overlay-screensaver`, service-only, `keepLoaded: true`. Schema is Omarchy's; validate with `omarchy plugin validate .` |
 | `bin/omarchy-overlay-screensaver` | CLI wrapper. Its real job is rebuilding `XDG_RUNTIME_DIR`/`OMARCHY_PATH` so the IPC call works from non-interactive ssh. |
 | `install.sh` / `uninstall.sh` | CLI-on-PATH only. The plugin itself is installed via `omarchy plugin add <repo> --enable` — these scripts never touch `~/.config/omarchy/`. |
-| `vendor/xscreensaver/hacks/glx/glsl/` | Porting **sources only** (nothing here is built/shipped): 38 `.glsl` files from xscreensaver 6.16, each keeping its author/license header. The license matrix (which files are safe to port vs do-not-ship) is in `vendor/xscreensaver/README.md`. |
+| `vendor/xscreensaver/` | Reference copies from the xscreensaver 6.16 release, **not built/shipped**: `hacks/glx/glsl/` (38 `.glsl` files — porting sources, each keeping its author/license header) and `hacks/xmatrix.c` / `hacks/glx/glmatrix.c` + `hacks/images/matrix*.png` (the Matrix hacks, vendored for `moonshots/matrix-hacks.md`). License matrix (which files are safe to port vs do-not-ship) is in `vendor/xscreensaver/README.md`. |
 | `moonshots/` | Design sketches for half-baked extension ideas (not implemented, not committed to). See its README. Currently: [xscreensaver-hacks.md](moonshots/xscreensaver-hacks.md) — running the full xscreensaver hack collection via an offscreen Xvfb + frame-capture stage. Verified licensing/portability facts live there. |
 | `README.md` | User-facing: install, usage, the dismissal/recovery ladder. |
 
