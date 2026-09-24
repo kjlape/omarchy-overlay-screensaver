@@ -126,7 +126,18 @@ Item {
 
   Process {
     id: cursorProc
-    command: ["hyprctl", "cursorpos"]
+    // The shell process runs without HYPRLAND_INSTANCE_SIGNATURE (uwsm strips
+    // it), so plain `hyprctl` fails here. Derive the signature from
+    // XDG_RUNTIME_DIR/hypr/ at call time (newest instance wins).
+    command: ["bash", "-c",
+      "d=\"$XDG_RUNTIME_DIR/hypr\"; " +
+      "sig=$(ls -t \"$d\" 2>/dev/null | head -n1); " +
+      "if [ -z \"$sig\" ]; then echo \"no hypr instance\" >&2; exit 1; fi; " +
+      "HYPRLAND_INSTANCE_SIGNATURE=\"$sig\" hyprctl cursorpos"]
+    stderr: StdioCollector {
+      onStreamFinished: if (String(text).trim() !== "")
+        console.log("overlay-screensaver: cursorpos stderr: " + String(text).trim())
+    }
     stdout: StdioCollector {
       onStreamFinished: {
         var pos = String(text || "").trim()
