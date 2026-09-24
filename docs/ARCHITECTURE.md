@@ -108,13 +108,11 @@ next shell reload. Each surface:
 Input handling inside each surface:
 
 - A `MouseArea` over the whole overlay → click to dismiss.
-- An `Item { focus: true }` with `Keys.onKeyPressed` → **any keystroke** to dismiss.
-  This is the same key-catcher pattern the built-in clipboard panel uses.
-  This is the same key-catcher pattern the built-in clipboard panel uses.
-- An `Item { focus: true }` with `Keys.onKeyPressed` → **any keystroke** to dismiss.
-  This is the same key-catcher pattern the built-in clipboard panel uses.
+- An `Item { focus: true }` with `Keys.onPressed` → **any keystroke** to dismiss.
+  This is the same key-catcher pattern the built-in clipboard panel uses
+  (which handles `Keys.onEscapePressed`; the generic `onPressed` signal here
+  catches every key).
 
-  This is the same key-catcher pattern the built-in clipboard panel uses.
 
 The image is `Image.PreserveAspectCrop`, `asynchronous: true`, sourced from
 `file://<path>`. Empty path → black (the PanelWindow `color`).

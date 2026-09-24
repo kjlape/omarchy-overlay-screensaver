@@ -210,8 +210,8 @@ Item {
         focus: true
 
         // Dismiss on any keystroke (Escape included).
-        Keys.onKeyPressed: function(event) {
-          root.hide("key-" + event.keyString)
+        Keys.onPressed: function(event) {
+          root.hide("key-" + event.text)
           event.accepted = true
         }
       }
