@@ -10,7 +10,7 @@ only, no idle trigger yet.
 
 ```
 omarchy-overlay-screensaver show     # image covers everything
-<Esc>                                # dismiss (or click, or CLI hide)
+<Esc>                                # dismiss (or click, or move the mouse, or CLI hide)
 omarchy-overlay-screensaver status   # {"visible":false,"image":"…","screens":N}
 ```
 
@@ -20,14 +20,16 @@ Four ways to get your screen back, in order:
 
 1. **Escape** — the overlay grabs the keyboard exclusively while shown.
 2. **Click anywhere** on the overlay.
-3. **CLI from ssh or another TTY** (no display access needed):
+3. **Move the mouse** — the cursor is polled via `hyprctl cursorpos` while the
+   overlay is shown, and any movement dismisses it.
+4. **CLI from ssh or another TTY** (no display access needed):
 
    ```bash
    omarchy-overlay-screensaver hide
    ssh box omarchy-overlay-screensaver hide
    ```
 
-4. **Failsafe — guaranteed recovery.** The overlay lives inside the
+5. **Failsafe — guaranteed recovery.** The overlay lives inside the
    omarchy-shell process and always starts hidden, so restarting the shell can
    never come back overlaid:
 

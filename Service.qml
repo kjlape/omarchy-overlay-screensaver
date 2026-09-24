@@ -11,9 +11,10 @@ import Quickshell.Wayland
 // Dismissal (in order of preference):
 //   1. Escape key  — the overlay grabs the keyboard exclusively while shown
 //   2. Any click   — MouseArea below
-//   3. IPC: `omarchy-shell overlayscreensaver hide` (works from ssh/TTY,
+//   3. Mouse move  — cursor position polled via `hyprctl cursorpos` while shown
+//   4. IPC: `omarchy-shell overlayscreensaver hide` (works from ssh/TTY,
 //      see bin/omarchy-overlay-screensaver)
-//   4. Nuke option: `omarchy-shell overlayscreensaver kill` or
+//   5. Nuke option: `omarchy-shell overlayscreensaver kill` or
 //      `omarchy restart shell` — the overlay starts hidden, so a shell
 //      restart always recovers the screen. Nothing here runs outside the
 //      shell process; there is no daemon that can wedge the overlay.
@@ -37,6 +38,11 @@ Item {
 
   property bool overlayVisible: false
   property string imagePath: ""
+
+  // Mouse-move dismissal: while the overlay is shown, poll `hyprctl cursorpos`
+  // and hide as soon as the cursor moves from its position at show time.
+  // The empty string marks "baseline not yet sampled".
+  property string cursorBaseline: ""
 
   // ---- config from shell.json ----
   readonly property var pluginConfig: {
@@ -67,6 +73,7 @@ Item {
 
   function show(source): string {
     refreshImage()
+    root.cursorBaseline = "" // resample cursor position on each show
     root.overlayVisible = true
     console.log("overlay-screensaver: shown source=" + String(source || "unknown")
       + " image=" + (root.imagePath || "(none)"))
@@ -105,6 +112,33 @@ Item {
       onStreamFinished: {
         var p = String(text || "").trim()
         if (p !== "") root.imagePath = p
+      }
+    }
+  }
+
+  Timer {
+    id: cursorTimer
+    interval: 300
+    running: root.overlayVisible
+    repeat: true
+    onTriggered: if (!cursorProc.running) cursorProc.running = true
+  }
+
+  Process {
+    id: cursorProc
+    command: ["hyprctl", "cursorpos"]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var pos = String(text || "").trim()
+        if (pos === "") return
+        if (root.cursorBaseline === "") {
+          root.cursorBaseline = pos
+          return
+        }
+        if (pos !== root.cursorBaseline) {
+          console.log("overlay-screensaver: hidden source=mouse-move")
+          root.overlayVisible = false
+        }
       }
     }
   }
