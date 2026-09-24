@@ -1,0 +1,74 @@
+#!/bin/bash
+# Control the kjlape.overlay-screensaver shell plugin from anywhere — including
+# an ssh login or another TTY, which has no Wayland session of its own.
+#
+# Talks to the omarchy-shell IPC socket, so it needs no display access.
+# `kill` is the failsafe: it restarts the whole omarchy shell, and the overlay
+# always starts hidden, so the screen is guaranteed to come back.
+
+set -uo pipefail
+
+# An ssh command runs a non-interactive shell, which never sources ~/.bashrc,
+# so the session environment omarchy-shell needs is not set. Rebuild it.
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
+
+SHELL_BIN=${OMARCHY_SHELL_BIN:-/usr/bin/omarchy-shell}
+TARGET=overlayscreensaver
+
+usage() {
+  cat <<'USAGE'
+Usage: omarchy-overlay-screensaver <command> [--source TAG]
+
+Commands:
+  show     Show the overlay (covers everything on every monitor)
+  hide     Hide the overlay
+  toggle   Flip it
+  status   Print {visible, image, screens} as JSON
+  kill     FAILSAFE: restart the omarchy shell. The overlay starts hidden,
+           so this always recovers the screen — even if IPC itself is wedged.
+
+Options:
+  --source TAG  Label for the plugin's log line (default: caller info)
+
+Examples:
+  omarchy-overlay-screensaver show
+  ssh box omarchy-overlay-screensaver hide
+  ssh box omarchy-overlay-screensaver kill     # last resort
+USAGE
+}
+
+default_source() {
+  local who=${USER:-$(id -un)}
+  local peer=${SSH_CONNECTION:-${SSH_CLIENT:-}}
+  if [[ -n $peer ]]; then echo "ssh:${who}@${peer%% *}"; else echo "local:${who}"; fi
+}
+
+SOURCE=$(default_source)
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --source) SOURCE=$2; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    show|hide|toggle|status|kill) CMD=$1; shift ;;
+    *) usage >&2; exit 1 ;;
+  esac
+done
+
+[[ -n ${CMD:-} ]] || { usage >&2; exit 1; }
+
+# The IPC socket can exit 0 even when the call failed, so surface a clear
+# error when the shell is not reachable.
+if ! "$SHELL_BIN" shell ping >/dev/null 2>&1; then
+  echo "omarchy-overlay-screensaver: omarchy-shell IPC not reachable." >&2
+  if [[ $CMD == kill ]]; then
+    echo "Falling back to a direct shell restart..." >&2
+    exec "$OMARCHY_PATH/bin/omarchy" restart shell 2>/dev/null || systemctl --user restart omarchy-shell.service
+  fi
+  exit 1
+fi
+
+"$SHELL_BIN" "$TARGET" "$CMD" "$SOURCE" 2>/dev/null || "$SHELL_BIN" "$TARGET" "$CMD" 2>/dev/null || {
+  echo "omarchy-overlay-screensaver: IPC call failed — is the plugin enabled in shell.json?" >&2
+  exit 1
+}

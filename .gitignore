@@ -1,0 +1,3 @@
+# local dev symlink convention some omarchy setups use
+*.qmlc
+*.log
