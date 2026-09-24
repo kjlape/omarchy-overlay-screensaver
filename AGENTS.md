@@ -33,10 +33,14 @@ trigger (deliberate — do not fight omarchy's built-in screensaver).
    that says which hack is next and what its difficulty class is.
    **Read the tips list before porting any shader.**
 
-Task shortcuts: porting a shader → roadmap.md (checklist + tips) plus the
-condensed recipe in "Porting a shader hack" below. Anything involving
-blank overlays / dead IPC / weird reload behavior → troubleshooting.md's
-diagnostic ladder. Changing QML structure → ARCHITECTURE.md first.
+Task shortcuts: porting a shader → the project skill
+[.agents/skills/port-shader/SKILL.md](.agents/skills/port-shader/SKILL.md)
+(`/skill:port-shader`, or just "port next from roadmap") — a condensed,
+verified loop; roadmap.md (checklist + tips) and the "Porting a shader
+hack" section below are the authority when anything is unclear. Anything
+involving blank overlays / dead IPC / weird reload behavior →
+troubleshooting.md's diagnostic ladder. Changing QML structure →
+ARCHITECTURE.md first.
 
 ## Key files
 
