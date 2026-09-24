@@ -69,23 +69,25 @@ The omarchy shell injects four properties into every service instance
 
 `pluginConfig` digs this plugin's entry out of the live
 `~/.config/omarchy/shell.json` `plugins[]` array (matching by `id`, tolerating
-the `@` prefix omarchy uses for some references). Currently one key:
+the `@` prefix omarchy uses for some references). Currently two keys:
 
 - `image` — absolute path to the overlay image. Falls back to the
   current background via `readlink -f ~/.local/state/omarchy/current/background`
   (the same symlink `omarchy.background` follows).
+- `shader` — name of the GLSL hack used by `showShader`/the `shader` CLI
+  verb (default `starnest`; unknown names log and fall back).
 
 shell.json hot-reloads on save, but `pluginConfig` is a binding over
 `shell.shellConfig`, so config edits land live without a plugin rescan.
 
 ### State model — deliberately minimal
 
-Exactly one bit: `visible: false`. No state file, no daemon, nothing that
-survives a shell restart. That is the failsafe design: **the overlay always
-initializes hidden**, so restarting the shell is a guaranteed recovery even if
-the process is wedged. If you add state (e.g. remembering user-preferred
-images), keep it out of the visibility path, or you break the recovery
-guarantee.
+One bit that matters: `overlayVisible: false`. (The content-mode selection
+`image`/`shader` is also state, but it is deliberately outside the visibility
+path — the overlay still always initializes hidden and image-mode, so a
+shell restart remains a guaranteed recovery even mid-shader.) No state file,
+no daemon, nothing that survives a restart. If you add state, keep it out of
+the visibility path.
 
 ### The overlay surfaces
 
@@ -117,16 +119,53 @@ Input handling inside each surface:
 The image is `Image.PreserveAspectCrop`, `asynchronous: true`, sourced from
 `file://<path>`. Empty path → black (the PanelWindow `color`).
 
+### Shader content (ported GLSL hacks)
+
+`contentMode === "shader"` swaps the `Image` for a `ShaderEffect` inside the
+same surface, rendering a ported xscreensaver/shadertoy fragment shader —
+see `moonshots/xscreensaver-hacks.md` for why this is the sane subset of the
+"run all hacks" moonshot (they're per-frame fragment shaders; no Xvfb
+pipeline needed). Everything runs in-process on the GPU, so the recovery
+guarantee and the whole dismissal ladder are untouched.
+
+Moving parts, all of which cost debugging time — copy this recipe:
+
+- **Shaders live in `shaders/`** as Vulkan-style GLSL sources, baked to
+  `.qsb` by qt6-shadertools. Rebuild after editing:
+  `/usr/lib/qt6/bin/qsb --glsl "100,120,150,330,440" shaders/starnest.frag -o shaders/starnest.frag.qsb`
+  (baked `.qsb` files are committed — `qsb` isn't guaranteed on install
+  machines). A QML-source `fragmentShader:` needs the built file, not the
+  raw GLSL.
+- **The fragment input MUST be named `qt_TexCoord0`** (location 0) — anything
+  else fails to match Qt's vertex stage with a confusing link error.
+- **Ship your own vertex stage too** (`starnest.vert`): Qt's implicit default
+  has no explicit-location output, and the NVIDIA linker refuses to match it
+  against the fragment input (`Failed to link shader program: … no matching
+  output`). Costless to include; saves the mystery.
+- **Uniforms by name**: `property real time` on the ShaderEffect maps to the
+  `time` float in the shader's uniform block (after `qt_Matrix`/`qt_Opacity`).
+  `aspect` (w/h) is passed instead of `iResolution`.
+- **Animation clock**: a plain 16 ms `Timer` increments `root.shaderTime`
+  while `overlayVisible && contentMode === "shader"`. This Quickshell build
+  has no `FrameTimer`.
+- Hot-reload gotcha: **`.qsb` changes do not trigger a QML reload, and QML
+  reloads can serve stale compiles** — after shader edits, `omarchy restart
+  shell` is the reliable test. Iterate in a scratch instance first (see
+  troubleshooting.md).
+- Multi-monitor: each surface gets its own `ShaderEffect` instance; they all
+  bind the same `root.shaderTime`, so the animation is in sync.
+
 ### IPC
 
 `IpcHandler { target: "overlayscreensaver" }` exposes:
 
 | Method | Args | Notes |
 |---|---|---|
-| `show(source)` | source tag for logging | returns `"ok"` |
+| `show(source)` | source tag for logging | returns `"ok"`; image mode |
+| `showShader(source)` | | shader mode (`shader` CLI verb) |
 | `hide(source)` | | |
 | `toggle(source)` | | |
-| `status()` | | JSON: `{visible, image, screens}` |
+| `status()` | | JSON: `{visible, mode, shader, image, screens}` |
 | `kill()` | | restarts the whole shell |
 
 Caveat inherited from the platform: **the IPC socket can exit 0 even when the
@@ -178,6 +217,11 @@ is making the call work from **ssh and other non-login environments**:
 - **Animations / video**: swap the `Image` for `VideoOutput` /
   `QtMultimedia` (see `nosignal.motion-wallpaper`) or a QML animation. Keep
   the PanelWindow/layer/keyboardFocus scaffolding identical.
+- **More shader hacks**: the rest of xscreensaver's `hacks/glx/glsl/`
+  collection (or any shadertoy.com program) ports the same way `starnest`
+  did — copy the frag, rename the input to `qt_TexCoord0`, add `time`/
+  `aspect` uniforms, bake both stages, and register the name in
+  `knownShaders` in Service.qml.
 - **Bar widget toggle**: add a `barWidget` entry point to the manifest and a
   `BarWidget.qml` (see `lap.dock-recover` for the minimal pattern).
 

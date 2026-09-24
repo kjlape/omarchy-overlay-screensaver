@@ -10,8 +10,9 @@ only, no idle trigger yet.
 
 ```
 omarchy-overlay-screensaver show     # image covers everything
+omarchy-overlay-screensaver shader   # "Star Nest" flies through a fractal nebula
 <Esc>                                # dismiss (or click, or move the mouse, or CLI hide)
-omarchy-overlay-screensaver status   # {"visible":false,"image":"…","screens":N}
+omarchy-overlay-screensaver status   # {"visible":false,"mode":"image","screens":N,…}
 ```
 
 ## Dismissal & recovery
@@ -76,16 +77,30 @@ In `~/.config/omarchy/shell.json`, `plugins[]`:
 ```json
 {
   "id": "kjlape.overlay-screensaver",
-  "image": "/home/you/Pictures/x.png"
+  "image": "/home/you/Pictures/x.png",
+  "shader": "starnest"
 }
 ```
 
 With no `image`, the overlay falls back to the current omarchy background
-(`~/.local/state/omarchy/current/background`).
+(`~/.local/state/omarchy/current/background`). `shader` selects the GLSL
+hack used by the `shader` command (see below) — currently only `starnest`.
+
+## Shader hacks
+
+`shader` renders a ported [xscreensaver](https://www.jwz.org/xscreensaver/)
+GLSL hack with a Qt `ShaderEffect` inside the same layer-shell surface —
+in-process, so every dismissal path and the recovery guarantee still apply.
+The current port is **Star Nest** by Kali
+([shadertoy.com/view/XlfGRj](https://www.shadertoy.com/view/XlfGRj), MIT;
+upstream xscreensaver ships it as `hacks/glx/glsl/starnest.glsl`) — a
+volumetric kaliset fractal flythrough. GLSL sources live in `shaders/`;
+the baked `.qsb` files are rebuilt with
+`/usr/lib/qt6/bin/qsb --glsl "100,120,150,330,440" <in> -o <in>.qsb`.
 
 ## IPC surface
 
-`omarchy-shell overlayscreensaver <show|hide|toggle|status|kill>` — the CLI is
+`omarchy-shell overlayscreensaver <show|showShader|hide|toggle|status|kill>` — the CLI is
 a wrapper that rebuilds the session environment for non-interactive ssh
 callers.
 

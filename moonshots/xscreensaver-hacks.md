@@ -7,6 +7,14 @@
 
 Not implemented. This is a researched design sketch.
 
+> **Update:** the *complement* path described under "Why not alternatives"
+> (porting the GLSL/shadertoy hacks to a QML `ShaderEffect`) is now real —
+> `starnest` ("Star Nest" by Kali, MIT) is ported and shipped, driven by the
+> `shader` CLI verb / `showShader` IPC. See `shaders/` and the "Shader
+> content" section of [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+> The Xvfb offscreen-stage architecture below remains the moonshot for the
+> other ~250 hacks.
+
 ## Licensing: verified against the 6.16 source (Sep 2026)
 
 The hacks are OSS and **permissively licensed — deliberately not GPL**.

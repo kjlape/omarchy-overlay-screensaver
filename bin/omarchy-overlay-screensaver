@@ -22,9 +22,10 @@ Usage: omarchy-overlay-screensaver <command> [--source TAG]
 
 Commands:
   show     Show the overlay (covers everything on every monitor)
+  shader   Show the overlay with the GLSL hack (starnest) instead of the image
   hide     Hide the overlay
   toggle   Flip it
-  status   Print {visible, image, screens} as JSON
+  status   Print {visible, mode, shader, image, screens} as JSON
   kill     FAILSAFE: restart the omarchy shell. The overlay starts hidden,
            so this always recovers the screen — even if IPC itself is wedged.
 
@@ -50,7 +51,7 @@ while [[ $# -gt 0 ]]; do
   case $1 in
     --source) SOURCE=$2; shift 2 ;;
     -h|--help) usage; exit 0 ;;
-    show|hide|toggle|status|kill) CMD=$1; shift ;;
+    show|shader|hide|toggle|status|kill) CMD=$1; shift ;;
     *) usage >&2; exit 1 ;;
   esac
 done
@@ -68,7 +69,12 @@ if ! "$SHELL_BIN" shell ping >/dev/null 2>&1; then
   exit 1
 fi
 
-"$SHELL_BIN" "$TARGET" "$CMD" "$SOURCE" 2>/dev/null || "$SHELL_BIN" "$TARGET" "$CMD" 2>/dev/null || {
+if [[ $CMD == shader ]]; then
+  IPC=showShader
+else
+  IPC=$CMD
+fi
+"$SHELL_BIN" "$TARGET" "$IPC" "$SOURCE" 2>/dev/null || "$SHELL_BIN" "$TARGET" "$IPC" 2>/dev/null || {
   echo "omarchy-overlay-screensaver: IPC call failed — is the plugin enabled in shell.json?" >&2
   exit 1
 }

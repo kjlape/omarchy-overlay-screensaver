@@ -20,8 +20,11 @@ import Quickshell.Wayland
 //      shell process; there is no daemon that can wedge the overlay.
 //
 // Config (shell.json plugins[] entry):
-//   { "id": "kjlape.overlay-screensaver", "image": "/path/to/img.png" }
+//   { "id": "kjlape.overlay-screensaver", "image": "/path/to/img.png",
+//     "shader": "starnest" }
 // With no `image`, falls back to the current omarchy background.
+// `shader` selects the ported xscreensaver GLSL hack (see shaders/) shown
+// by `showShader` instead of the static image.
 
 Item {
   id: root
@@ -38,6 +41,19 @@ Item {
 
   property bool overlayVisible: false
   property string imagePath: ""
+
+  // ---- shader hack content (see moonshots/xscreensaver-hacks.md) ----
+  // "image" = static image / background (the MVP); "shader" = a ported
+  // xscreensaver GLSL hack rendered by a ShaderEffect inside the same
+  // layer-shell surface. Everything stays in-process, so the recovery
+  // guarantee is untouched (no Xvfb / child-process tree needed).
+  property string contentMode: "image"
+  property string shaderName: ""   // resolved shader id, "" = none available
+  property real shaderTime: 0      // seconds of shader animation so far
+
+  // Ported hacks, keyed by name → qsb (baked with qt6-shadertools `qsb`).
+  readonly property var knownShaders: ({ "starnest": "shaders/starnest.frag.qsb" })
+  readonly property string configuredShader: String(cfg("shader", "starnest")).trim()
 
   // Mouse-move dismissal: while the overlay is shown, poll `hyprctl cursorpos`
   // and hide as soon as the cursor moves from its position at show time.
@@ -71,12 +87,38 @@ Item {
     if (!readlinkProc.running) readlinkProc.running = true
   }
 
+  function resolveShader(): string {
+    var qsb = root.knownShaders[root.configuredShader]
+    if (qsb === undefined) {
+      console.log("overlay-screensaver: unknown shader \"" + root.configuredShader
+        + "\" (known: " + Object.keys(root.knownShaders).join(", ") + ")")
+      return ""
+    }
+    return qsb
+  }
+
   function show(source): string {
+    root.contentMode = "image"
     refreshImage()
     root.cursorBaseline = "" // resample cursor position on each show
     root.overlayVisible = true
     console.log("overlay-screensaver: shown source=" + String(source || "unknown")
       + " image=" + (root.imagePath || "(none)"))
+    return "ok"
+  }
+
+  // Show the shader hack instead of the static image. Falls back to the
+  // image mode (with an error string) if the shader name is unknown.
+  function showShader(source): string {
+    var qsb = root.resolveShader()
+    if (qsb === "") return "unknown shader: " + root.configuredShader
+    root.shaderName = root.configuredShader
+    root.contentMode = "shader"
+    root.shaderTime = 0 // restart animation on each show
+    root.cursorBaseline = "" // resample cursor position on each show
+    root.overlayVisible = true
+    console.log("overlay-screensaver: shown source=" + String(source || "unknown")
+      + " shader=" + root.shaderName)
     return "ok"
   }
 
@@ -100,9 +142,21 @@ Item {
   function status(): string {
     return JSON.stringify({
       visible: root.overlayVisible,
+      mode: root.contentMode,
+      shader: root.shaderName,
       image: root.imagePath,
       screens: Quickshell.screens.length
     })
+  }
+
+  // Drive the shader hack at ~60 fps while it is shown. A dedicated clock
+  // (not a binding on Date.now()) so the animation restarts cleanly per show.
+  Timer {
+    id: shaderTimer
+    interval: 16
+    running: root.overlayVisible && root.contentMode === "shader"
+    repeat: true
+    onTriggered: root.shaderTime += 0.016
   }
 
   Process {
@@ -165,6 +219,7 @@ Item {
     target: "overlayscreensaver"
 
     function show(source: string): string { return root.show(source) }
+    function showShader(source: string): string { return root.showShader(source) }
     function hide(source: string): string { return root.hide(source) }
     function toggle(source: string): string { return root.toggle(source) }
     function status(): string { return root.status() }
@@ -197,7 +252,23 @@ Item {
         source: root.imagePath !== "" ? ("file://" + root.imagePath) : ""
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
-        visible: root.imagePath !== ""
+        visible: root.contentMode === "image" && root.imagePath !== ""
+      }
+
+      // Ported xscreensaver GLSL hack ("starnest"), rendered in-process on
+      // the same layer-shell surface. Uniforms `time`/`aspect` map to the
+      // properties below; the shader itself is baked to shaders/*.frag.qsb
+      // with qt6-shadertools.
+      ShaderEffect {
+        id: starNest
+        anchors.fill: parent
+        visible: root.contentMode === "shader"
+        fragmentShader: Qt.resolvedUrl("shaders/starnest.frag.qsb")
+        vertexShader: Qt.resolvedUrl("shaders/starnest.vert.qsb") // Qt's default vertex stage lacks an explicit-location output the NVIDIA linker will accept
+        blending: false
+        // property names must match the uniform names in the .frag exactly
+        property real time: root.shaderTime
+        property real aspect: width / height
       }
 
       MouseArea {

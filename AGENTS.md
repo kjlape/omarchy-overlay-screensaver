@@ -28,7 +28,8 @@ MVP — manual show/hide, no idle trigger.
 
 | File | Role |
 |---|---|
-| `Service.qml` | The whole plugin: overlay surfaces (`Variants` → `PanelWindow` per monitor), config lookup, `IpcHandler` (`show`/`hide`/`toggle`/`status`/`kill`). ~180 lines — read it in full. |
+| `Service.qml` | The whole plugin: overlay surfaces (`Variants` → `PanelWindow` per monitor), config lookup, shader content mode, `IpcHandler` (`show`/`shader`/`hide`/`toggle`/`status`/`kill`). Read it in full. |
+| `shaders/` | Ported xscreensaver GLSL hack (`starnest`) — Vulkan-style GLSL sources + baked `.qsb`; see "Shader content" in docs/ARCHITECTURE.md. |
 | `manifest.json` | Plugin identity `kjlape.overlay-screensaver`, service-only, `keepLoaded: true`. Schema is Omarchy's; validate with `omarchy plugin validate .` |
 | `bin/omarchy-overlay-screensaver` | CLI wrapper. Its real job is rebuilding `XDG_RUNTIME_DIR`/`OMARCHY_PATH` so the IPC call works from non-interactive ssh. |
 | `install.sh` / `uninstall.sh` | CLI-on-PATH only. The plugin itself is installed via `omarchy plugin add <repo> --enable` — these scripts never touch `~/.config/omarchy/`. |
