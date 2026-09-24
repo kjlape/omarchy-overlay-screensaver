@@ -9,7 +9,7 @@ import Quickshell.Wayland
 // per monitor, driven by a single `visible` flag.
 //
 // Dismissal (in order of preference):
-//   1. Escape key  — the overlay grabs the keyboard exclusively while shown
+//   1. Any keystroke — the overlay grabs the keyboard exclusively while shown
 //   2. Any click   — MouseArea below
 //   3. Mouse move  — cursor position polled via `hyprctl cursorpos` while shown
 //   4. IPC: `omarchy-shell overlayscreensaver hide` (works from ssh/TTY,
@@ -209,8 +209,9 @@ Item {
         anchors.fill: parent
         focus: true
 
-        Keys.onEscapePressed: function(event) {
-          root.hide("escape")
+        // Dismiss on any keystroke (Escape included).
+        Keys.onKeyPressed: function(event) {
+          root.hide("key-" + event.keyString)
           event.accepted = true
         }
       }
