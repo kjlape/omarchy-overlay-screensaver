@@ -6,6 +6,15 @@
 
 // Relicensed as MIT License, by permission, 8-Mar-2026.
 
+// Ported for Qt 6 ShaderEffect: mainImage(out vec4, fragCoord) became
+// qt_TexCoord0 in [0,1]; iTime became the `time` uniform (seconds);
+// iResolution became the `aspect` uniform (surface w/h). No iMouse or
+// texture channels to drop. Coordinate conversion is the res.y-normalized
+// family — see the jwz note in main(). Alpha is forced to 1.0: shadertoy
+// ignores output alpha, but our layer-shell surface composites with it —
+// a=0 made the whole overlay (incl. the letterbox clip) transparent, so
+// the desktop showed through.
+
 #version 440
 layout(location = 0) in vec2 qt_TexCoord0;
 layout(location = 0) out vec4 fragColor;
@@ -46,9 +55,17 @@ void main() {
     vec4 o = vec4(0,0,0,0);
     
     float i=0.,d=0.,s=0.,m=0.,k=0.;
-    vec3 p = vec3(aspect, 1., 1.);
-    vec2 u = (qt_TexCoord0+qt_TexCoord0-p.xy)/p.y;
-    if (abs(u.y) > .75) { o *=i; return; };
+    vec3 p; // jwz: upstream's init (iResolution) is dead — overwritten before read
+    // jwz: was `vec3 p = iResolution; u = (u+u-p.xy)/p.y;` — the res.y-
+    // normalized family. Correct Qt form is (2*uv - 1)*vec2(aspect,1);
+    // writing (2*uv - vec2(aspect,1)) puts x in [-aspect, 2-aspect] —
+    // compressed + shifted, garbled at the view edges — and the missing
+    // y-flip turned the image upside down.
+    vec2 u = (qt_TexCoord0*2.0 - 1.0) * vec2(aspect, 1.0);
+    u.y = -u.y; // Qt texcoords run top-down; shadertoy runs bottom-up
+    // jwz: was `o *=i; return;` — the letterbox clip must stay OPAQUE black;
+    // o had a=0 there, which let the desktop show through the bands.
+    if (abs(u.y) > .75) { fragColor = vec4(0,0,0,1); return; };
 
     vec3 D = normalize(vec3(u, 1));
     vec2 v = (.1*sin(time))+u + (u.yx*.8+.2-vec2(-1.,.1));
@@ -67,5 +84,6 @@ void main() {
     }
     
     o = tanh(o/1.3e3/exp(d/6e1)/length(v));
+    o.a = 1.0; // jwz: shadertoy ignores alpha; the layer surface composites with it
     fragColor = o;
 }

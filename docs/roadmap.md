@@ -61,7 +61,7 @@ All files are single-pass `mainImage` shaders unless noted. Verified from the lo
 | 6 | `downfall.glsl` | Downfall | Matt Vianueva (MIT, relicensed) | 35 lines | ✅ Done |
 | 7 | `trizm.glsl` | Trizm | Matt Vianueva (MIT, relicensed) | ✅ Done — 64 lines; per-pixel start-distance dither re-based on converted uv (no pixel-resolution uniform); `o *= i` golf dropped | ✅ Done |
 | 8 | `hexplasma.glsl` | Hex Plasma | Nemerix (MIT) | 57 lines | ✅ Done — cleanest port yet: no `iMouse`, no textures, `res.y`-normalized coordinate family (universeball conversion block verbatim); only edits were the uniform block, `iTime` → `time`, and the y flip |
-| 9 | `rigrekt.glsl` | Rigrekt | Matt Vianueva (MIT, relicensed) | 61 lines | ✅ Done — 115 lines, clean port with one `iMouse`-drop (time-driven camera drift) | ✅ |
+| 9 | `rigrekt.glsl` | Rigrekt | Matt Vianueva (MIT, relicensed) | 61 lines | ✅ Done — `res.y`-normalized conversion family; visual follow-up fixed the `(2·uv − vec2(aspect,1))` anti-pattern → `(2·uv − 1)·vec2(aspect,1)` + y flip (was upside-down, x compressed) and the missing `fragColor.a = 1.0` (tip 18 — a=0 made the whole overlay transparent) | ✅ |
 | 10 | `batteredplanet.glsl` | Battered Planet | mrange (CC0) | 355 lines, raymarched | 🟡 Medium |
 | 11 | `goldenapollian.glsl` | Golden Apollian | mrange (CC0) | 383 lines | 🟡 Medium |
 | 12 | `selfreflect.glsl` | Self Reflect | mrange (CC0, mixed credits) | borrowings under WTFPL/MIT/unknown — check embedded credit lines | 🟡 Medium |
@@ -247,6 +247,17 @@ Hard-won, in rough order of when they bite:
     Some shaders use custom macros like `#define R(a) mat2(cos(a + vec4(0,33,11,0)))`
     which must be properly included in the fragment shader for the shader to compile. This
     was found during the port of `rigrekt.glsl`.
+18. **Shadertoy's output alpha is ignored — our surface's isn't.**
+    The shadertoy canvas is opaque, so the alpha channel of `mainImage`'s
+    output does nothing. Our layer-shell surface composites *with* alpha,
+    so a port that never sets it (`o` starts at `vec4(0,0,0,0)`, every
+    added term carries a=0 — rigrekt) renders a fully transparent overlay
+    and the desktop shows straight through. End every port with
+    `fragColor.a = 1.0` (all eight sibling ports do) — and cover the
+    early-return paths too: rigrekt's `abs(u.y) > .75` letterbox clip
+    returned `o *= i` = transparent black, so the bands let the desktop
+    through as well. Symptom to recognize: a "working" shader whose
+    capture is just the desktop under a faint tint.
 
 Cross-references: the bake/reload/hot-reload mechanics are documented in
 [ARCHITECTURE.md](ARCHITECTURE.md) “Shader content”; the diagnostic ladder
