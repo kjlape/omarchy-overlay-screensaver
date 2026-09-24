@@ -110,7 +110,9 @@ unknown names are rejected without showing anything. Current ports:
 
 GLSL sources live in `shaders/`; the baked `.qsb` files are rebuilt with
 `/usr/lib/qt6/bin/qsb --glsl "100,120,150,330,440" <in> -o <in>.qsb`.
-See [docs/roadmap.md](docs/roadmap.md) for the full porting plan and recipe.
+See [docs/roadmap.md](docs/roadmap.md) for the full porting plan, recipe,
+and the porting-tips list (coordinate conversion, testing loop) learned
+from the first two ports.
 
 ## IPC surface
 

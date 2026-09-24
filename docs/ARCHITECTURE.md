@@ -163,6 +163,11 @@ Moving parts, all of which cost debugging time — copy this recipe:
   reloads can serve stale compiles** — after shader edits, `omarchy restart
   shell` is the reliable test. Iterate in a scratch instance first (see
   troubleshooting.md).
+- **Porting tips** — the shadertoy→Qt coordinate conversion (with the
+  skew bug it caused), idiom-golf unpacking, provenance comment
+  conventions, and the bake/restart/test-with-auto-hide loop are
+  collected in [roadmap.md](roadmap.md) “Porting tips”; the reference
+  port with the canonical conversion block is `shaders/universeball.frag`.
 - Multi-monitor: each surface gets its own `ShaderEffect` instance; they all
   bind the same `root.shaderTime`, so the animation is in sync.
 

@@ -137,6 +137,52 @@ doubles as the reference for the 1→N step: `showShader` takes the shader
 name as its first argument (empty = configured default), the CLI grew
 `shader [NAME]` and `shaders`, and `status` now reports the full registry.
 
+### Porting tips (learned porting `starnest` + `universeball`)
+
+Hard-won, in rough order of when they bite:
+
+1. **Do the coordinate conversion once, correctly.** Shadertoy
+   `u = (2*fragCoord − res)/res.y` with `fragCoord = uv·(aspect,1)`
+   simplifies to `u = (2*uv − 1)·vec2(aspect, 1)` — do NOT translate by
+   `vec2(aspect,1)`, that skews + stretches x (the universeball bug).
+   Flip y too: Qt texcoords run top-down, shadertoy bottom-up.
+   Copy the conversion block verbatim from `shaders/universeball.frag` —
+   it carries this gotcha in its header comment as a permanent warning.
+2. **Unpack the idiom-golf carefully.** Upstream shaders are compressed
+   for brevity: undefined-until-written outputs (shadertoy guarantees the
+   first write happens; Qt/GLSL does not — initialize `c`/`o` before the
+   loop, see the `// jwz` init lines), comma-operator chains in `for`
+   headers, and float literals that must be re-`0.`-suffixed when
+   rewritten. Expanding them into readable statements makes the diff
+   against upstream reviewable.
+3. **Keep the upstream header verbatim, adaptation notes after it.**
+   License/attribution block untouched; a comment block below records what
+   was adapted (inputs, uniforms, dropped `iMouse`) — that's provenance
+   for every future reader.
+4. **Bake + restart, don't trust hot-reload.** `.qsb` changes don't
+   trigger a QML reload and reloads can serve stale compiles
+   (ARCHITECTURE.md “Shader content”): `qsb` both stages, then
+   `omarchy restart shell` before judging a port.
+5. **Test with a scheduled auto-hide** so the screen is never left
+   covered while you eyeball a new port:
+   `( sleep 6; omarchy-overlay-screensaver hide ) & omarchy-overlay-screensaver shader <name>`
+6. **Check the journal, not just your eyes**: GL link/compile errors land in
+   `journalctl --user -u "wayland-wm@hyprland.desktop.service"` (grep the
+   timestamp window of the show; see troubleshooting.md). A blank/black
+   overlay usually means a silent link failure.
+7. **A skewed or stretched image means conversion math, not the port.**
+   Verify against the shadertoy preview at the same aspect before
+   suspecting the algorithm port.
+8. **CLI edits need `install.sh`** — the PATH copy at `~/.local/bin` is a
+   copy, not a symlink; plugin QML is hot-reloaded (symlinked install),
+   the CLI is not.
+
+Cross-references: the bake/reload/hot-reload mechanics are documented in
+[ARCHITECTURE.md](ARCHITECTURE.md) “Shader content”; the diagnostic ladder
+for blank overlays in [troubleshooting.md](troubleshooting.md); the
+per-program checklist above; and `shaders/universeball.frag`'s header is
+the canonical copy-paste source for the conversion block.
+
 ### Estimated effort
 
 - Simple single-pass, no-texture shaders (the ~20 short ones): ~15–30 min each including visual testing
