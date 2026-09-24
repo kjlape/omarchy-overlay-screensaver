@@ -32,6 +32,7 @@ MVP — manual show/hide, no idle trigger.
 | `manifest.json` | Plugin identity `kjlape.overlay-screensaver`, service-only, `keepLoaded: true`. Schema is Omarchy's; validate with `omarchy plugin validate .` |
 | `bin/omarchy-overlay-screensaver` | CLI wrapper. Its real job is rebuilding `XDG_RUNTIME_DIR`/`OMARCHY_PATH` so the IPC call works from non-interactive ssh. |
 | `install.sh` / `uninstall.sh` | CLI-on-PATH only. The plugin itself is installed via `omarchy plugin add <repo> --enable` — these scripts never touch `~/.config/omarchy/`. |
+| `moonshots/` | Design sketches for half-baked extension ideas (not implemented, not committed to). See its README. Currently: [xscreensaver-hacks.md](moonshots/xscreensaver-hacks.md) — running the full xscreensaver hack collection via an offscreen Xvfb + frame-capture stage. Verified licensing/portability facts live there. |
 | `README.md` | User-facing: install, usage, the dismissal/recovery ladder. |
 
 ## Rules for changes

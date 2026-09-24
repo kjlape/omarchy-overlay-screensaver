@@ -1,11 +1,46 @@
 # Moonshot: run the xscreensaver hack collection in the overlay
 
 > Goal: support **all** classic xscreensaver hacks (xflame, pyro, gluco,
-> phosphor, …) as content for the overlay — not just static images — while
-> keeping the plugin's core guarantees (overlay above everything, always
-> starts hidden, `kill` fully recovers).
+> phosphor, … — ~270 as of 6.16) as content for the overlay — not just
+> static images — while keeping the plugin's core guarantees (overlay
+> above everything, always starts hidden, `kill` fully recovers).
 
 Not implemented. This is a researched design sketch.
+
+## Licensing: verified against the 6.16 source (Sep 2026)
+
+The hacks are OSS and **permissively licensed — deliberately not GPL**.
+
+- jwz's own code carries a BSD-like notice ("Permission to use, copy,
+  modify, distribute, and sell… provided that the copyright notice appear
+  in all copies").
+- `README.hacking` states it outright: *"The GNU GPL is not compatible
+  with the rest of XScreenSaver"* — contributions must be BSD-like.
+- Practical consequence for us: we may run, wrap, patch, or even fork and
+  relicense hack code freely, with attribution kept intact. Nothing
+  copyleft contaminates the plugin.
+- Caveat: the collection is ~270 hacks by dozens of authors (321 config
+  files in 6.16), each file carrying its own header — check per-file if we
+  ever copy code rather than merely exec the packaged binaries (which this
+  design does).
+
+Related upstream facts worth knowing (all checked in the 6.16 tarball):
+
+- The hacks are ~270 standalone C programs built on the `screenhack`
+  framework, drawing through **jwxyz**, jwz's portability layer with
+  backends for X11, macOS, iOS, Android — **no Wayland backend exists**.
+  On Wayland, hacks still render via XWayland; jwz's Wayland support is
+  daemon-side only (idle/blanking/DPMS protocols). This is independent
+  confirmation of the "no place to put them under Wayland" constraint
+  below.
+- Since **6.14** xscreensaver can also run **shadertoy.com programs** as
+  screen savers, and ships ~18 GLSL hacks (`stardome`, `topologica`, …).
+  Those are per-frame fragment shaders — trivially portable to a QML
+  `ShaderEffect` as a complement to this design (see "Why not
+  alternatives").
+- jwz publishes no public git repo; tarballs only. The
+  `Zygo/xscreensaver` GitHub mirror tracks each release if you want to
+  grep the tree without downloading tarballs.
 
 ## Why this is hard (the constraints that shape it)
 
@@ -103,8 +138,12 @@ source changes: from "a file path" to "a live frame stream."
 - **XWayland on screen**: can't stack above layer-shell (bar, other
   overlays) or even above fullscreen toplevels reliably; would break the
   plugin's whole reason to exist.
-- **Reimplementing hacks in QML/shaders**: nice as a complement for your
-  3–4 favorites, but no path to all ~250 hacks.
+- **Reimplementing hacks in QML/shaders**: reasonable as a complement for
+  your 3–4 favorites — and cheaper than it sounds, because since 6.14 the
+  GLSL/shadertoy hacks (`stardome`, `topologica`, …) plus the whole
+  Shadertoy corpus port nearly verbatim into a `ShaderEffect` inside the
+  existing overlay surface. But no path to all ~270 hacks, and the classic
+  2D XCopyArea-era hacks (xmatrix, munch, deco, …) have no shader form.
 - **Bundling old xscreensaver for `-window-id`**: fighting removed
   functionality; private-Xvfb + `-root` is simpler and upstream-supported.
 
