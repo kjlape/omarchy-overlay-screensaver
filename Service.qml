@@ -59,7 +59,8 @@ Item {
   readonly property var knownShaders: ({
     "starnest": "shaders/starnest.frag.qsb",
     "universeball": "shaders/universeball.frag.qsb",
-    "topologica": "shaders/topologica.frag.qsb"
+    "topologica": "shaders/topologica.frag.qsb",
+    "synthwavecity": "shaders/synthwavecity.frag.qsb"
   })
   readonly property string configuredShader: String(cfg("shader", "starnest")).trim()
 

@@ -11,7 +11,7 @@ The "run all 270 hacks" moonshot via Xvfb is tracked separately under `moonshots
 ## Status
 
 - [x] Phase 0: porting recipe established (`starnest`)
-- [~] Phase 1: xscreensaver `glx/glsl/` collection (32 programs, 38 files — verified against local 6.16 tree). In progress: 3/32 ported (`starnest`, `universeball`, `topologica`). The `universeball` port also landed the multi-shader API — `showShader(name, source)`, `shader [NAME]` / `shaders` CLI verbs — so future ports need no Service.qml changes beyond a `knownShaders` entry.
+- [~] Phase 1: xscreensaver `glx/glsl/` collection (32 programs, 38 files — verified against local 6.16 tree). In progress: 4/32 ported (`starnest`, `universeball`, `topologica`, `synthwavecity`). The `universeball` port also landed the multi-shader API — `showShader(name, source)`, `shader [NAME]` / `shaders` CLI verbs — so future ports need no Service.qml changes beyond a `knownShaders` entry.
 - [] Phase 2: curated shadertoy.com picks (30–50 programs)
 - [ ] Phase 3: config + UX integration
 - [ ] Phase 4: tooling (batch conversion, shader gallery)
@@ -73,7 +73,7 @@ All files are single-pass `mainImage` shaders unless noted. Verified from the lo
 | 18 | `polarnight.glsl` | Polar Night | supervitas (MIT, relicensed) | 269 lines, raymarched terrain | 🟡 Medium |
 | 19 | `prococean.glsl` | Procedural Ocean | afl_ext (MIT) | uses `iMouse` — steer with time | 🟡 Medium |
 | 20 | `driftclouds.glsl` | Drift Clouds | drift (license **unverified** — no statement in file) | 127 lines | 🟡 Medium |
-| 21 | `synthwavecity.glsl` | Synthwave City | 3w36zj6 (derivative; original **CC BY 3.0**) | attribution required — deprioritize for license reasons | 🟢 Lower |
+| 21 | `synthwavecity.glsl` | Synthwave City | 3w36zj6 (derivative; original **CC BY 3.0**) | attribution required — deprioritize for license reasons | ✅ Done |
 | 22 | `elementalring.glsl` | Elemental Ring | otaviogood (CC0) | uses `iMouse` | 🟢 Lower |
 | 23 | `alienbeacon.glsl` | Alien Beacon | otaviogood (CC0) | 424 lines, uses `iMouse` | 🟢 Lower |
 | 24 | `protophore.glsl` | Protophore | otaviogood (CC0) | **3 texture channels** (`iChannel0–2`) — needs QML-supplied textures | 🟢 Lower |
@@ -282,12 +282,26 @@ shaders/
 └── <slug>.md              # attribution note (optional)
 ```
 
-**Vertex stage template**:
+**Vertex stage template** (the `shaders/starnest.vert` shape — ShaderEffect
+declares `position` (loc 0) and `texCoord` (loc 1) as inputs; the earlier
+"4-line passthrough" sketch in this section does not compile):
 ```glsl
 #version 440
-layout(location = 0) in vec2 qt_TexCoord0;
+layout(location = 0) in vec4 position;
+layout(location = 1) in vec2 texCoord;
 layout(location = 0) out vec2 qt_TexCoord0;
-void main() { qt_TexCoord0 = qt_TexCoord0; }
+
+layout(std140, binding = 0) uniform buf {
+    mat4 qt_Matrix;
+    float qt_Opacity;
+    float time;
+    float aspect;
+};
+
+void main() {
+    qt_TexCoord0 = texCoord;
+    gl_Position = qt_Matrix * position;
+}
 ```
 
 **Porting checklist per program**:
