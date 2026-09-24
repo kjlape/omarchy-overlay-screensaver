@@ -63,7 +63,8 @@ Item {
     "synthwavecity": "shaders/synthwavecity.frag.qsb",
     "downfall": "shaders/downfall.frag.qsb",
     "trizm": "shaders/trizm.frag.qsb",
-    "hexplasma": "shaders/hexplasma.frag.qsb"
+    "hexplasma": "shaders/hexplasma.frag.qsb",
+    "stardome": "shaders/stardome.frag.qsb"
   })
   readonly property string configuredShader: String(cfg("shader", "starnest")).trim()
 

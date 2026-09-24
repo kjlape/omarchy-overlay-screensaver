@@ -122,6 +122,12 @@ unknown names are rejected without showing anything. Current ports:
   `hacks/glx/glsl/trizm.glsl`) — a twisting tunnel of triangle-wave
   conduits (inspired by @OldEclipse's "Cyber Conduits"), raymarched with
   an `asin(sin(x))` triangle-wave distortion.
+- **stardome** — Stars and galaxy by mrange
+  ([shadertoy.com/view/stBcW1](https://www.shadertoy.com/view/stBcW1), CC0;
+  upstream xscreensaver ships it as `hacks/glx/glsl/stardome.glsl`) —
+  a slow-panning night-sky dome: layered starfield, galaxy band, moon,
+  spherical grid, and horizon glow over a black ground plane; loops on a
+  gentle 30 s fade cycle.
 
 GLSL sources live in `shaders/`; the baked `.qsb` files are rebuilt with
 `/usr/lib/qt6/bin/qsb --glsl "100,120,150,330,440" <in> -o <in>.qsb`.

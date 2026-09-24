@@ -11,7 +11,7 @@ The "run all 270 hacks" moonshot via Xvfb is tracked separately under `moonshots
 ## Status
 
 - [x] Phase 0: porting recipe established (`starnest`)
-- [~] Phase 1: xscreensaver `glx/glsl/` collection (32 programs, 38 files — verified against local 6.16 tree). In progress: 7/32 ported (`starnest`, `universeball`, `topologica`, `synthwavecity`, `downfall`, `trizm`, `hexplasma`). The `universeball` port also landed the multi-shader API — `showShader(name, source)`, `shader [NAME]` / `shaders` CLI verbs — so future ports need no Service.qml changes beyond a `knownShaders` entry.
+- [~] Phase 1: xscreensaver `glx/glsl/` collection (32 programs, 38 files — verified against local 6.16 tree). In progress: 8/32 ported (`starnest`, `universeball`, `topologica`, `synthwavecity`, `downfall`, `trizm`, `hexplasma`, `stardome`). The `universeball` port also landed the multi-shader API — `showShader(name, source)`, `shader [NAME]` / `shaders` CLI verbs — so future ports need no Service.qml changes beyond a `knownShaders` entry.
 - [] Phase 2: curated shadertoy.com picks (30–50 programs)
 - [ ] Phase 3: config + UX integration
 - [ ] Phase 4: tooling (batch conversion, shader gallery)
@@ -55,7 +55,7 @@ All files are single-pass `mainImage` shaders unless noted. Verified from the lo
 |---|---|---|---|---|---|
 | 1 | `starnest.glsl` | Star Nest | Kali (MIT) | ✅ Done | ✅ |
 | 2 | `topologica.glsl` | Topologica | otaviogood (CC0) | ✅ Done — `iMouse` dropped; camera drifts on `time` alone; anti-unroll trick re-based on `time` | ✅ |
-| 3 | `stardome.glsl` | Stardome | mrange (CC0) | 300 lines | 🔴 High |
+| 3 | `stardome.glsl` | Stardome | mrange (CC0) | ✅ Done — 300 lines but near-copy-paste: no `iMouse`/textures; the only non-`main` `iResolution` use is an unread local (`aa` in `grid()`) so the port needs no resolution uniform; upstream's 30 s `mod(iTime)` camera loop with fade-in/out gates kept verbatim (breathing pulse is upstream intent) | ✅ Done |
 | 4 | `universeball.glsl` | Universe Ball | Matt Vianueva (MIT, relicensed) | 43 lines, trivial port | ✅ Done |
 | 5 | `bubblecolors.glsl` | Bubble Colors | Matt Vianueva (license **unverified** — no statement in file) | 23 lines | 🔴 High |
 | 6 | `downfall.glsl` | Downfall | Matt Vianueva (MIT, relicensed) | 35 lines | ✅ Done |
@@ -182,8 +182,11 @@ Hard-won, in rough order of when they bite:
    instead maps `uv = fragCoord/res·2 − 1` (a plain `[−1,1]` square) and
    handles aspect inside the camera basis (`uv.x · sideNorm · aspect`) —
    for that family the correct port is `u = 2·qt_TexCoord0 − 1` plus the
-   y flip, no `vec2(aspect,1)` scaling at all. Read the upstream
-   `fragCoord → uv` line first; picking the wrong family produces the same
+   y flip, no `vec2(aspect,1)` scaling at all. Some members of that
+   family then apply the ratio explicitly after the map (`stardome`:
+   `p.x *= res.x/res.y`) — keep that: map plain, y flip, then scale at
+   the exact point upstream did. Read the upstream `fragCoord → uv`
+   line first; picking the wrong family produces the same
    skew symptoms as tip 7.
 10. **Re-base upstream runtime-state tricks on uniforms you actually
    have.** Shadertoy-only inputs (`iFrame`, `iMouse`, `iChannel*`) appear
@@ -206,15 +209,37 @@ Hard-won, in rough order of when they bite:
    GLSL 440 built-ins the sources use (`tanh`, `smoothstep`, `mat2`) all
    work unmodified under `qsb`. Check a source against the roadmap table's
    Notes column first to know which class you're in.
-12. **Bake immediately after writing the GLSL.** `qsb` catches syntax
+13. **Bake immediately after writing the GLSL.** `qsb` catches syntax
     typos (a stray `1.0_`) in seconds — far cheaper than discovering them
     after a shell restart + auto-hide test cycle. Treat
     `qsb && qsb` as part of writing the file, not a separate step
     (per-program checklist steps 4–5).
-13. **`status` is a no-visual smoke test.** After the first show, the
+14. **`status` is a no-visual smoke test.** After the first show, the
     JSON keeps `mode`/`shader` even once hidden — use it to confirm the
     registry entry and name resolution (`shaders` verb + `status`) before
     spending a show cycle on a possibly-broken port.
+15. **Audit every `iResolution`/`RESOLUTION` reference — the last one may
+    be dead code.** Tip 10 says grep for all `i*` uniforms; for
+    `iResolution` specifically, check each hit is actually read. Stardome
+    only referenced `RESOLUTION.y` outside `main()` as an *unread* local
+    (`float aa = 2.0/RESOLUTION.y;` in `grid()`) — deleting it left zero
+    resolution dependency, so the port ships with the standard
+    `time`/`aspect` uniform block and no plumbing changes. If a live
+    pixel-size term (`aa = 2.0/res.y` used for AA widths) survives the
+    audit, that's when a resolution uniform becomes unavoidable.
+16. **Verify visually with a screenshot, not just live eyes.** You can
+    inspect the overlay without watching it: while the auto-hide window
+    (tip 5) runs, `grim -o <output> /tmp/<name>.png` captures the overlay
+    mid-animation; the image can be viewed directly, or region-analysed
+    with ImageMagick (`-crop x360+0+0` strips + `-format
+    "%[fx:mean]"` per screen third) to confirm orientation and brightness
+    structure without eyeballing anything live. Stardome's port was
+    verified this way: horizon glow in the bottom third, sparse stars
+    up top, clean (unskewed) grid curves — the tip-7 failure classes are
+    all visible in the capture.
+    (Bake fades into account: a shader with an upstream `mod(iTime)`
+    loop + fade gates — stardome — is black at cycle edges; capture
+    mid-cycle.)
 
 Cross-references: the bake/reload/hot-reload mechanics are documented in
 [ARCHITECTURE.md](ARCHITECTURE.md) “Shader content”; the diagnostic ladder
@@ -223,7 +248,9 @@ per-program checklist above; `shaders/universeball.frag`'s header is
 the canonical copy-paste source for the conversion block (tip 1's
 `res.y`-normalized family — see tip 9 for the other family); and
 `shaders/topologica.frag` is the reference for the plain `[−1,1]`
-mapping, `iMouse`-drop substitutions, and the `ZERO_TRICK` re-base.
+mapping, `iMouse`-drop substitutions, and the `ZERO_TRICK` re-base, and
+`shaders/stardome.frag` is the same family with the explicit post-map
+`p.x *= aspect` (tip 9's sub-variant).
 
 ### Estimated effort
 
