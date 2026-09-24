@@ -35,7 +35,7 @@ Item {
   readonly property string home: Quickshell.env("HOME")
   readonly property string backgroundLink: home + "/.local/state/omarchy/current/background"
 
-  property bool visible: false
+  property bool overlayVisible: false
   property string imagePath: ""
 
   // ---- config from shell.json ----
@@ -67,20 +67,20 @@ Item {
 
   function show(source): string {
     refreshImage()
-    root.visible = true
+    root.overlayVisible = true
     console.log("overlay-screensaver: shown source=" + String(source || "unknown")
       + " image=" + (root.imagePath || "(none)"))
     return "ok"
   }
 
   function hide(source): string {
-    root.visible = false
+    root.overlayVisible = false
     console.log("overlay-screensaver: hidden source=" + String(source || "unknown"))
     return "ok"
   }
 
   function toggle(source): string {
-    return root.visible ? root.hide(source) : root.show(source)
+    return root.overlayVisible ? root.hide(source) : root.show(source)
   }
 
   function kill(): string {
@@ -92,7 +92,7 @@ Item {
 
   function status(): string {
     return JSON.stringify({
-      visible: root.visible,
+      visible: root.overlayVisible,
       image: root.imagePath,
       screens: Quickshell.screens.length
     })
@@ -135,7 +135,7 @@ Item {
       required property var modelData
       screen: modelData
 
-      visible: root.visible
+      visible: root.overlayVisible
       anchors { top: true; bottom: true; left: true; right: true }
       color: "#000000"
 
