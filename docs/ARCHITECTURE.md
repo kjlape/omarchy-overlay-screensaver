@@ -236,6 +236,10 @@ result.
   that's owned by omarchy's built-in screensaver. To trigger on idle instead,
   either reuse `Quickshell.Hyprland` idle events or add a config key
   (`"idleSeconds"`) with a `Timer` poll — do not fight the built-in.
+  Researched in full (it's `omarchy.idle`, not hypridle, that owns the timers;
+  the `screensaver-off` toggle lives inside the launcher script; the PATH-shadow
+  recipe; and why a lock hook is mandatory) in
+  [`moonshots/idle-integration.md`](../moonshots/idle-integration.md).
 - **Auto-dismiss when the lock engages**: look up the lock service via
   `shell.serviceFor(...)` (see `kjlape.remote-lock`'s `lockService()` for the
   resolveEnabledId dance) and hide when it locks.

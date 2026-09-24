@@ -40,7 +40,10 @@ verified loop; roadmap.md (checklist + tips) and the "Porting a shader
 hack" section below are the authority when anything is unclear. Anything
 involving blank overlays / dead IPC / weird reload behavior →
 troubleshooting.md's diagnostic ladder. Changing QML structure →
-ARCHITECTURE.md first.
+ARCHITECTURE.md first. Anything about idle auto-activation, the screensaver
+toggle, or interaction with the lock screen →
+[moonshots/idle-integration.md](moonshots/idle-integration.md) (researched and
+verified against the shell source; deliberately not yet implemented).
 
 ## Key files
 
@@ -52,7 +55,7 @@ ARCHITECTURE.md first.
 | `bin/omarchy-overlay-screensaver` | CLI wrapper. Its real job is rebuilding `XDG_RUNTIME_DIR`/`OMARCHY_PATH` so the IPC call works from non-interactive ssh. |
 | `install.sh` / `uninstall.sh` | CLI-on-PATH only. The plugin itself is installed via `omarchy plugin add <repo> --enable` — these scripts never touch `~/.config/omarchy/`. |
 | `vendor/xscreensaver/` | Reference copies from the xscreensaver 6.16 release, **not built/shipped**: `hacks/glx/glsl/` (38 `.glsl` files — porting sources, each keeping its author/license header) and `hacks/xmatrix.c` / `hacks/glx/glmatrix.c` + `hacks/images/matrix*.png` (the Matrix hacks, vendored for `moonshots/matrix-hacks.md`). License matrix (which files are safe to port vs do-not-ship) is in `vendor/xscreensaver/README.md`. |
-| `moonshots/` | Design sketches for half-baked extension ideas (not implemented, not committed to). See its README. Currently: [xscreensaver-hacks.md](moonshots/xscreensaver-hacks.md) — running the full xscreensaver hack collection via an offscreen Xvfb + frame-capture stage. Verified licensing/portability facts live there. |
+| `moonshots/` | Design sketches for half-baked extension ideas (not implemented, not committed to). See its README. Currently: [xscreensaver-hacks.md](moonshots/xscreensaver-hacks.md) — running the full xscreensaver hack collection via an offscreen Xvfb + frame-capture stage. Verified licensing/portability facts live there. [idle-integration.md](moonshots/idle-integration.md) — triggering the overlay on idle; read before wiring any idle/lock integration (it documents how `omarchy.idle` really works, where the `screensaver-off` toggle lives, and why a hide-on-lock hook is mandatory). |
 | `README.md` | User-facing: install, usage, the dismissal/recovery ladder. |
 
 ## Rules for changes
