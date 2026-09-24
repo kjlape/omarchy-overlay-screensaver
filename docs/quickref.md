@@ -59,4 +59,9 @@ Use `Quickshell.Settings.idle.screensaver` (seconds since idle) or `Quickshell.H
 - Hot-reload can serve a stale broken compile → `omarchy restart shell` (always safe; overlay starts hidden)
 - IPC exits 0 on failure — check the result string, not the exit code
 
+- Shader hacks: `omarchy-overlay-screensaver shader [NAME]` (empty = shell.json
+  `shader` key, else `starnest`); `shaders` lists the registry. Over IPC:
+  `showShader(NAME, SOURCE)` — name first, source tag last. Unknown names are
+  rejected without showing anything (recovery guarantee unaffected).
+
 See `troubleshooting.md` for the full diagnostic ladder.

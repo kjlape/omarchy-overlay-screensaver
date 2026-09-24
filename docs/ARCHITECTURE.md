@@ -74,8 +74,10 @@ the `@` prefix omarchy uses for some references). Currently two keys:
 - `image` — absolute path to the overlay image. Falls back to the
   current background via `readlink -f ~/.local/state/omarchy/current/background`
   (the same symlink `omarchy.background` follows).
-- `shader` — name of the GLSL hack used by `showShader`/the `shader` CLI
-  verb (default `starnest`; unknown names log and fall back).
+- `shader` — name of the GLSL hack used as the **default** by
+  `showShader`/the `shader` CLI verb when no name argument is passed
+  (default `starnest`). An explicit name argument always wins; unknown
+  names are rejected (error string, nothing shown).
 
 shell.json hot-reloads on save, but `pluginConfig` is a binding over
 `shell.shellConfig`, so config edits land live without a plugin rescan.
@@ -132,10 +134,19 @@ Moving parts, all of which cost debugging time — copy this recipe:
 
 - **Shaders live in `shaders/`** as Vulkan-style GLSL sources, baked to
   `.qsb` by qt6-shadertools. Rebuild after editing:
-  `/usr/lib/qt6/bin/qsb --glsl "100,120,150,330,440" shaders/starnest.frag -o shaders/starnest.frag.qsb`
+  `/usr/lib/qt6/bin/qsb --glsl "100,120,150,330,440" shaders/<name>.frag -o shaders/<name>.frag.qsb`
   (baked `.qsb` files are committed — `qsb` isn't guaranteed on install
   machines). A QML-source `fragmentShader:` needs the built file, not the
   raw GLSL.
+- **The registry is `knownShaders` in Service.qml** — name → frag `.qsb`
+  path. Adding a port is: `shaders/<name>.vert`, ported `<name>.frag`,
+  bake both, add the map entry. `resolveShaderName()` maps a request (or,
+  if empty, the configured default) to a registry key; the `ShaderEffect`
+  binds `activeFragUrl`/`activeVertUrl`, derived from `shaderName`, so the
+  shader swaps by changing that one property. All vertex stages are the
+  same passthrough (`shaders/starnest.vert` shape) but each shader ships
+  its own copy anyway — Qt reloads both stages when either URL changes,
+  and per-shader files keep the port recipe uniform.
 - **The fragment input MUST be named `qt_TexCoord0`** (location 0) — anything
   else fails to match Qt's vertex stage with a confusing link error.
 - **Ship your own vertex stage too** (`starnest.vert`): Qt's implicit default
@@ -162,10 +173,11 @@ Moving parts, all of which cost debugging time — copy this recipe:
 | Method | Args | Notes |
 |---|---|---|
 | `show(source)` | source tag for logging | returns `"ok"`; image mode |
-| `showShader(source)` | | shader mode (`shader` CLI verb) |
+| `showShader(shader, source)` | name (empty = configured default) | shader mode (`shader [NAME]` CLI verb); unknown name → error string, nothing shown |
+| `shaders()` | | newline-joined registry names (`shaders` CLI verb) |
 | `hide(source)` | | |
 | `toggle(source)` | | |
-| `status()` | | JSON: `{visible, mode, shader, image, screens}` |
+| `status()` | | JSON: `{visible, mode, shader, shaders, image, screens}` |
 | `kill()` | | restarts the whole shell |
 
 Caveat inherited from the platform: **the IPC socket can exit 0 even when the
@@ -174,7 +186,15 @@ call failed**, so callers must check the result string (the CLI does).
 ## The CLI — bin/omarchy-overlay-screensaver
 
 A thin wrapper over `omarchy-shell overlayscreensaver <cmd>`, whose real job
-is making the call work from **ssh and other non-login environments**:
+is making the call work from **ssh and other non-login environments**.
+Shader plumbing: `shader [NAME]` maps to `showShader(NAME, source)` and
+`shaders` maps to the `shaders()` registry listing. The name is optional on
+the CLI but is the **first** `showShader` argument over IPC — IPC methods
+pass arguments positionally and the source tag always rides last. The CLI
+checks the result string (not the exit code): `show/hide/toggle/shader/kill`
+return `"ok"` or an error; `status`/`shaders` return their payload as the
+result.
+
 
 - A non-interactive ssh shell never sources `~/.bashrc`, so the session
   environment is missing. The CLI rebuilds `XDG_RUNTIME_DIR` (needed to find
@@ -219,9 +239,10 @@ is making the call work from **ssh and other non-login environments**:
   the PanelWindow/layer/keyboardFocus scaffolding identical.
 - **More shader hacks**: the rest of xscreensaver's `hacks/glx/glsl/`
   collection (or any shadertoy.com program) ports the same way `starnest`
-  did — copy the frag, rename the input to `qt_TexCoord0`, add `time`/
-  `aspect` uniforms, bake both stages, and register the name in
-  `knownShaders` in Service.qml.
+  and `universeball` did — copy the frag, rename the input to
+  `qt_TexCoord0`, add `time`/`aspect` uniforms, bake both stages, and
+  register the name in `knownShaders` in Service.qml. The full plan and
+  per-program checklist live in [roadmap.md](roadmap.md).
 - **Bar widget toggle**: add a `barWidget` entry point to the manifest and a
   `BarWidget.qml` (see `lap.dock-recover` for the minimal pattern).
 

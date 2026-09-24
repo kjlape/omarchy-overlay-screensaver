@@ -23,8 +23,9 @@ import Quickshell.Wayland
 //   { "id": "kjlape.overlay-screensaver", "image": "/path/to/img.png",
 //     "shader": "starnest" }
 // With no `image`, falls back to the current omarchy background.
-// `shader` selects the ported xscreensaver GLSL hack (see shaders/) shown
-// by `showShader` instead of the static image.
+// `shader` selects the DEFAULT ported xscreensaver GLSL hack (see shaders/)
+// used by `showShader`/the `shader` CLI verb when no name is passed; an
+// explicit name argument always wins (`shader universeball`).
 
 Item {
   id: root
@@ -52,8 +53,25 @@ Item {
   property real shaderTime: 0      // seconds of shader animation so far
 
   // Ported hacks, keyed by name → qsb (baked with qt6-shadertools `qsb`).
-  readonly property var knownShaders: ({ "starnest": "shaders/starnest.frag.qsb" })
+  // Each frag pairs with <name>.vert.qsb. The ShaderEffect binds these
+  // paths dynamically from `shaderName`, so adding an entry here (plus the
+  // four shader files) is all a new port needs — see docs/roadmap.md.
+  readonly property var knownShaders: ({
+    "starnest": "shaders/starnest.frag.qsb",
+    "universeball": "shaders/universeball.frag.qsb"
+  })
   readonly property string configuredShader: String(cfg("shader", "starnest")).trim()
+
+  // Active shader's baked stages, as URLs for the ShaderEffect. While no
+  // shader is active (image mode, before the first `showShader`) they fall
+  // back to the first known shader's files — the effect is hidden in image
+  // mode anyway, and a ShaderEffect with an empty fragmentShader fails to
+  // load, so a placeholder keeps the component valid at all times.
+  readonly property url activeFragUrl: root.knownShaders[root.shaderName] !== undefined
+    ? Qt.resolvedUrl(root.knownShaders[root.shaderName])
+    : Qt.resolvedUrl(root.knownShaders[Object.keys(root.knownShaders)[0]])
+  readonly property url activeVertUrl: Qt.resolvedUrl(
+    root.activeFragUrl.toString().replace(/\.frag\.qsb$/, ".vert.qsb"))
 
   // Mouse-move dismissal: while the overlay is shown, poll `hyprctl cursorpos`
   // and hide as soon as the cursor moves from its position at show time.
@@ -87,14 +105,17 @@ Item {
     if (!readlinkProc.running) readlinkProc.running = true
   }
 
-  function resolveShader(): string {
-    var qsb = root.knownShaders[root.configuredShader]
-    if (qsb === undefined) {
-      console.log("overlay-screensaver: unknown shader \"" + root.configuredShader
+  // Map a requested shader name to a known one. Empty/missing request falls
+  // back to the configured default; an unknown name logs and returns "".
+  function resolveShaderName(requested): string {
+    var wanted = String(requested || "").trim()
+    if (wanted === "") wanted = root.configuredShader
+    if (root.knownShaders[wanted] === undefined) {
+      console.log("overlay-screensaver: unknown shader \"" + wanted
         + "\" (known: " + Object.keys(root.knownShaders).join(", ") + ")")
       return ""
     }
-    return qsb
+    return wanted
   }
 
   function show(source): string {
@@ -107,12 +128,15 @@ Item {
     return "ok"
   }
 
-  // Show the shader hack instead of the static image. Falls back to the
-  // image mode (with an error string) if the shader name is unknown.
-  function showShader(source): string {
-    var qsb = root.resolveShader()
-    if (qsb === "") return "unknown shader: " + root.configuredShader
-    root.shaderName = root.configuredShader
+  // Show a shader hack instead of the static image. `shader` names a
+  // knownShaders entry; empty falls back to the configured default.
+  // Falls back to the image mode (with an error string) if the name is
+  // unknown — never leaves the overlay shown in a broken state.
+  function showShader(shader, source): string {
+    var name = root.resolveShaderName(shader)
+    if (name === "") return "unknown shader: \"" + String(shader || "").trim()
+      + "\" (known: " + Object.keys(root.knownShaders).join(", ") + ")"
+    root.shaderName = name
     root.contentMode = "shader"
     root.shaderTime = 0 // restart animation on each show
     root.cursorBaseline = "" // resample cursor position on each show
@@ -139,11 +163,16 @@ Item {
     return "ok"
   }
 
+  function shaders(): string {
+    return Object.keys(root.knownShaders).join("\n")
+  }
+
   function status(): string {
     return JSON.stringify({
       visible: root.overlayVisible,
       mode: root.contentMode,
       shader: root.shaderName,
+      shaders: Object.keys(root.knownShaders),
       image: root.imagePath,
       screens: Quickshell.screens.length
     })
@@ -219,7 +248,8 @@ Item {
     target: "overlayscreensaver"
 
     function show(source: string): string { return root.show(source) }
-    function showShader(source: string): string { return root.showShader(source) }
+    function showShader(shader: string, source: string): string { return root.showShader(shader, source) }
+    function shaders(): string { return root.shaders() }
     function hide(source: string): string { return root.hide(source) }
     function toggle(source: string): string { return root.toggle(source) }
     function status(): string { return root.status() }
@@ -255,16 +285,18 @@ Item {
         visible: root.contentMode === "image" && root.imagePath !== ""
       }
 
-      // Ported xscreensaver GLSL hack ("starnest"), rendered in-process on
-      // the same layer-shell surface. Uniforms `time`/`aspect` map to the
-      // properties below; the shader itself is baked to shaders/*.frag.qsb
-      // with qt6-shadertools.
+      // Ported xscreensaver GLSL hack, rendered in-process on the same
+      // layer-shell surface. Uniforms `time`/`aspect` map to the properties
+      // below; the shader stages are baked to shaders/<name>.{frag,vert}.qsb
+      // with qt6-shadertools, selected by name via `activeFragUrl`/
+      // `activeVertUrl` (the vertex stage is always the same passthrough —
+      // see shaders/starnest.vert — but Qt reloads both when either binding
+      // changes, which is what swaps shaders live).
       ShaderEffect {
-        id: starNest
         anchors.fill: parent
         visible: root.contentMode === "shader"
-        fragmentShader: Qt.resolvedUrl("shaders/starnest.frag.qsb")
-        vertexShader: Qt.resolvedUrl("shaders/starnest.vert.qsb") // Qt's default vertex stage lacks an explicit-location output the NVIDIA linker will accept
+        fragmentShader: root.activeFragUrl
+        vertexShader: root.activeVertUrl // Qt's default vertex stage lacks an explicit-location output the NVIDIA linker will accept
         blending: false
         // property names must match the uniform names in the .frag exactly
         property real time: root.shaderTime

@@ -11,7 +11,7 @@ The "run all 270 hacks" moonshot via Xvfb is tracked separately under `moonshots
 ## Status
 
 - [x] Phase 0: porting recipe established (`starnest`)
-- [] Phase 1: xscreensaver `glx/glsl/` collection (32 programs, 38 files — verified against local 6.16 tree)
+- [~] Phase 1: xscreensaver `glx/glsl/` collection (32 programs, 38 files — verified against local 6.16 tree). In progress: 2/32 ported (`starnest`, `universeball`). The `universeball` port also landed the multi-shader API — `showShader(name, source)`, `shader [NAME]` / `shaders` CLI verbs — so future ports need no Service.qml changes beyond a `knownShaders` entry.
 - [] Phase 2: curated shadertoy.com picks (30–50 programs)
 - [ ] Phase 3: config + UX integration
 - [ ] Phase 4: tooling (batch conversion, shader gallery)
@@ -34,7 +34,7 @@ The "run all 270 hacks" moonshot via Xvfb is tracked separately under `moonshots
    qsb --glsl shaders/<name>.vert -o shaders/<name>.vert.qsb
    ```
 4. Register in `Service.qml` `knownShaders` map
-5. Test: `omarchy-overlay-screensaver showShader <name>`
+5. Test: `omarchy-overlay-screensaver shader <name>`
 
 **Gotchas** (documented in ARCHITECTURE.md):
 - NVIDIA linker requires explicit-location vertex output
@@ -56,7 +56,7 @@ All files are single-pass `mainImage` shaders unless noted. Verified from the lo
 | 1 | `starnest.glsl` | Star Nest | Kali (MIT) | ✅ Done | ✅ |
 | 2 | `topologica.glsl` | Topologica | ? (see file header) | uses `iMouse` — replace with time-driven animation | 🔴 High |
 | 3 | `stardome.glsl` | Stardome | mrange (CC0) | 300 lines | 🔴 High |
-| 4 | `universeball.glsl` | Universe Ball | Matt Vianueva (MIT, relicensed) | 43 lines, trivial port | 🔴 High |
+| 4 | `universeball.glsl` | Universe Ball | Matt Vianueva (MIT, relicensed) | 43 lines, trivial port | ✅ Done |
 | 5 | `bubblecolors.glsl` | Bubble Colors | Matt Vianueva (license **unverified** — no statement in file) | 23 lines | 🔴 High |
 | 6 | `downfall.glsl` | Downfall | Matt Vianueva (MIT, relicensed) | 35 lines | 🔴 High |
 | 7 | `trizm.glsl` | Trizm | Matt Vianueva (MIT, relicensed) | 64 lines | 🔴 High |
@@ -102,10 +102,16 @@ For each of the remaining 31 programs (vendored at
 
 ```
 [ ] 1. Copy the GLSL source from the vendored xscreensaver 6.16 tree
-[ ] 2. Create shaders/<name>.vert (qt_TexCoord0 passthrough)
+[ ] 2. Create shaders/<name>.vert (qt_TexCoord0 passthrough — copy
+       shaders/starnest.vert, keep a per-shader copy: the ShaderEffect
+       swaps stages by URL and the recipe stays uniform per port)
 [ ] 3. Port shaders/<name>.frag:
        - Rename iTime → time
-       - Rename iResolution → aspect  
+       - Rename iResolution → aspect — CAREFUL: shadertoy's
+             (2*fragCoord - res)/res.y with fragCoord = uv*(aspect,1) becomes
+             u = (2*uv - 1)*vec2(aspect,1), NOT (2*uv - vec2(aspect,1));
+             also flip y (Qt texcoords run top-down, shadertoy bottom-up).
+             (Wrong version = skewed, x-stretched image — universeball bug)
        - Input: qt_TexCoord0
        - Output: fragColor
        - Drop iMouse dependency (replace with time-driven values)
@@ -114,13 +120,22 @@ For each of the remaining 31 programs (vendored at
              with a texture between passes, or merge into one pass if feasible
        - Texture-channel users: supply textures via QML source properties
              or strip the texture dependency
-[ ] 4. Bake: qsb --glsl shaders/<name>.frag -o shaders/<name>.frag.qsb
-[ ] 5. Bake: qsb --glsl shaders/<name>.vert -o shaders/<name>.vert.qsb
+[ ] 4. Bake: qsb --glsl "100,120,150,330,440" shaders/<name>.frag -o shaders/<name>.frag.qsb
+[ ] 5. Bake: qsb --glsl "100,120,150,330,440" shaders/<name>.vert -o shaders/<name>.vert.qsb
 [ ] 6. Add to knownShaders in Service.qml:
        readonly property var knownShaders: ({ ..., "<name>": "shaders/<name>.frag.qsb" })
-[ ] 7. Test: omarchy-overlay-screensaver showShader <name>
+       (that's the ONLY Service.qml change — the ShaderEffect resolves stages
+       dynamically from shaderName via activeFragUrl/activeVertUrl)
+[ ] 7. Test: omarchy-overlay-screensaver shader <name>
+       (IPC form: omarchy-shell overlayscreensaver showShader <name> <source>)
+       and verify `omarchy-overlay-screensaver shaders` lists it
 [ ] 8. Preserve the upstream license header verbatim in the .frag file
 ```
+
+`universeball` was the first port done under this multi-shader API and
+doubles as the reference for the 1→N step: `showShader` takes the shader
+name as its first argument (empty = configured default), the CLI grew
+`shader [NAME]` and `shaders`, and `status` now reports the full registry.
 
 ### Estimated effort
 
@@ -208,9 +223,9 @@ void main() { qt_TexCoord0 = qt_TexCoord0; }
        - vec2 res = iResolution → float aspect = width / height;  (passed from QML)
        - Remove iMouse usage or replace with time-derived value
 [ ] 5. Create shaders/<slug>.vert (4 lines above)
-[ ] 6. Bake both: qsb --glsl shaders/<slug>.frag -o shaders/<slug>.frag.qsb
-[ ] 7. Register in Service.qml knownShaders
-[ ] 8. Test: showShader <slug>
+[ ] 6. Bake both: qsb --glsl "100,120,150,330,440" shaders/<slug>.frag -o shaders/<slug>.frag.qsb
+[ ] 7. Register in Service.qml knownShaders (only change needed)
+[ ] 8. Test: omarchy-overlay-screensaver shader <slug>
 ```
 
 ---
@@ -226,13 +241,15 @@ Current config already supports `shader: "starnest"`. This should work for any p
 ```json
 {
   "id": "kjlape.overlay-screensaver",
-  "enabled": true,
-  "config": {
-    "image": "",
-    "shader": "stardome"
-  }
+  "image": "",
+  "shader": "stardome"
 }
 ```
+
+(Keys sit directly on the `plugins[]` entry — that's how `cfg()` reads
+them; verified against Service.qml during the 1→N step.) This sets the
+DEFAULT shader for the `shader` CLI verb / `showShader` with an empty name;
+explicit `shader <name>` always wins.
 
 ### 3.2. `knownShaders` as a resource file (optional)
 
@@ -249,17 +266,13 @@ shaders/
 
 Load with `Resource.loadJson()` at startup. This defers to a later refactor; inline map is fine for <20 shaders.
 
-### 3.3. List of available shaders
+### 3.3. List of available shaders — DONE (1→N step)
 
-CLI command (extension of current `status()`):
-
-```
-omarchy-shell overlayscreensaver list-shaders
-```
-
-Returns: `["starnest", "stardome", "topologica", ...]`
-
-Or add `listShaders()` to `IpcHandler`.
+Landed with `universeball`: `shaders()` on the `IpcHandler` returns the
+registry names newline-joined, the CLI exposes it as
+`omarchy-overlay-screensaver shaders`, and `status()` reports the full
+list in its `shaders` field. If a prettier payload (labels, credits) is
+needed later, pair it with 3.2's registry file.
 
 ### 3.4. Auto-discovery / registry
 

@@ -18,14 +18,17 @@ TARGET=overlayscreensaver
 
 usage() {
   cat <<'USAGE'
-Usage: omarchy-overlay-screensaver <command> [--source TAG]
+Usage: omarchy-overlay-screensaver <command> [NAME] [--source TAG]
 
 Commands:
   show     Show the overlay (covers everything on every monitor)
-  shader   Show the overlay with the GLSL hack (starnest) instead of the image
+  shader   Show the overlay with a GLSL hack instead of the image. NAME
+           picks the hack (default: the shell.json `shader` entry, else
+           starnest). Unknown names are rejected — nothing is shown.
+  shaders  List the available GLSL hacks, one per line
   hide     Hide the overlay
   toggle   Flip it
-  status   Print {visible, mode, shader, image, screens} as JSON
+  status   Print {visible, mode, shader, shaders, image, screens} as JSON
   kill     FAILSAFE: restart the omarchy shell. The overlay starts hidden,
            so this always recovers the screen — even if IPC itself is wedged.
 
@@ -34,6 +37,8 @@ Options:
 
 Examples:
   omarchy-overlay-screensaver show
+  omarchy-overlay-screensaver shader             # default hack
+  omarchy-overlay-screensaver shader universeball
   ssh box omarchy-overlay-screensaver hide
   ssh box omarchy-overlay-screensaver kill     # last resort
 USAGE
@@ -46,12 +51,17 @@ default_source() {
 }
 
 SOURCE=$(default_source)
+SHADER_NAME=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
     --source) SOURCE=$2; shift 2 ;;
     -h|--help) usage; exit 0 ;;
-    show|shader|hide|toggle|status|kill) CMD=$1; shift ;;
+    shader)
+      CMD=$1; shift
+      # optional shader name (anything not an option flag)
+      if [[ $# -gt 0 && $1 != --* ]]; then SHADER_NAME=$1; shift; fi ;;
+    show|shaders|hide|toggle|status|kill) CMD=$1; shift ;;
     *) usage >&2; exit 1 ;;
   esac
 done
@@ -71,10 +81,37 @@ fi
 
 if [[ $CMD == shader ]]; then
   IPC=showShader
+  ARGS=("$SHADER_NAME" "$SOURCE")
 else
   IPC=$CMD
+  ARGS=("$SOURCE")
 fi
-"$SHELL_BIN" "$TARGET" "$IPC" "$SOURCE" 2>/dev/null || "$SHELL_BIN" "$TARGET" "$IPC" 2>/dev/null || {
-  echo "omarchy-overlay-screensaver: IPC call failed — is the plugin enabled in shell.json?" >&2
-  exit 1
-}
+
+# Zero-arg methods (shaders, status, kill) never take the source slot, so
+# only pass it for the methods that do.
+case $CMD in
+  hide|toggle|show) ;;
+  shaders|status|kill) ARGS=() ;;
+esac
+
+# The IPC socket can exit 0 even on failure, so a fallback retry isn't
+# enough — surface the plugin's error string when we get one.
+RESULT=$("$SHELL_BIN" "$TARGET" "$IPC" "${ARGS[@]}" 2>/dev/null) \
+  || RESULT=$("$SHELL_BIN" "$TARGET" "$IPC" 2>/dev/null) \
+  || { echo "omarchy-overlay-screensaver: IPC call failed — is the plugin enabled in shell.json?" >&2; exit 1; }
+
+case $CMD in
+  show|hide|toggle|shader|kill)
+    # these return "ok" or an error string
+    if [[ $RESULT != ok ]]; then
+      echo "omarchy-overlay-screensaver: ${RESULT:-IPC call failed}" >&2
+      exit 1
+    fi ;;
+  *)
+    # status / shaders: the result IS the payload
+    if [[ -z $RESULT ]]; then
+      echo "omarchy-overlay-screensaver: IPC call failed — is the plugin enabled in shell.json?" >&2
+      exit 1
+    fi
+    echo "$RESULT" ;;
+esac

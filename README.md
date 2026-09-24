@@ -10,9 +10,11 @@ only, no idle trigger yet.
 
 ```
 omarchy-overlay-screensaver show     # image covers everything
-omarchy-overlay-screensaver shader   # "Star Nest" flies through a fractal nebula
+omarchy-overlay-screensaver shader   # default GLSL hack (config `shader`, else starnest)
+omarchy-overlay-screensaver shader universeball   # pick a specific GLSL hack
+omarchy-overlay-screensaver shaders   # list the available GLSL hacks
 <Esc>                                # dismiss (or click, or move the mouse, or CLI hide)
-omarchy-overlay-screensaver status   # {"visible":false,"mode":"image","screens":N,…}
+omarchy-overlay-screensaver status   # {"visible":false,"mode":"image","shader":"","shaders":[…],…}
 ```
 
 ## Dismissal & recovery
@@ -84,25 +86,38 @@ In `~/.config/omarchy/shell.json`, `plugins[]`:
 
 With no `image`, the overlay falls back to the current omarchy background
 (`~/.local/state/omarchy/current/background`). `shader` selects the GLSL
-hack used by the `shader` command (see below) — currently only `starnest`.
+hack used as the **default** by the `shader` command (see below); an explicit
+name argument (`omarchy-overlay-screensaver shader universeball`) always
+wins. Run `omarchy-overlay-screensaver shaders` for the list of available
+hacks — currently `starnest` and `universeball`.
 
 ## Shader hacks
 
-`shader` renders a ported [xscreensaver](https://www.jwz.org/xscreensaver/)
+`shader [NAME]` renders a ported [xscreensaver](https://www.jwz.org/xscreensaver/)
 GLSL hack with a Qt `ShaderEffect` inside the same layer-shell surface —
 in-process, so every dismissal path and the recovery guarantee still apply.
-The current port is **Star Nest** by Kali
-([shadertoy.com/view/XlfGRj](https://www.shadertoy.com/view/XlfGRj), MIT;
-upstream xscreensaver ships it as `hacks/glx/glsl/starnest.glsl`) — a
-volumetric kaliset fractal flythrough. GLSL sources live in `shaders/`;
-the baked `.qsb` files are rebuilt with
+`NAME` picks the hack (default: the `shader` config key, else `starnest`);
+unknown names are rejected without showing anything. Current ports:
+
+- **starnest** — Star Nest by Kali
+  ([shadertoy.com/view/XlfGRj](https://www.shadertoy.com/view/XlfGRj), MIT;
+  upstream xscreensaver ships it as `hacks/glx/glsl/starnest.glsl`) —
+  a volumetric kaliset fractal flythrough.
+- **universeball** — Universe Ball 2 by Matt Vianueva
+  ([shadertoy.com/view/WcGcWV](https://www.shadertoy.com/view/WcGcWV), MIT
+  relicensed by permission; upstream xscreensaver ships it as
+  `hacks/glx/glsl/universeball.glsl`) — a marble-planet miniverse flythrough.
+
+GLSL sources live in `shaders/`; the baked `.qsb` files are rebuilt with
 `/usr/lib/qt6/bin/qsb --glsl "100,120,150,330,440" <in> -o <in>.qsb`.
+See [docs/roadmap.md](docs/roadmap.md) for the full porting plan and recipe.
 
 ## IPC surface
 
-`omarchy-shell overlayscreensaver <show|showShader|hide|toggle|status|kill>` — the CLI is
-a wrapper that rebuilds the session environment for non-interactive ssh
-callers.
+`omarchy-shell overlayscreensaver <show|showShader <shader> <source>|shaders|hide|toggle|status|kill>`
+— the CLI is a wrapper that rebuilds the session environment for
+non-interactive ssh callers and adds shader-name handling (`showShader`'s
+first argument is the shader name; empty = configured default).
 
 ## Docs
 
