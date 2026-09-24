@@ -17,10 +17,11 @@
 // CRT. The xmatrix engine below is the same math; this fork only adds a
 // pre-stage and a post-stage around it:
 //
-//  pre  (top of main): barrel-curvature + H-sync wobble on qt_TexCoord0
-//                      before the grid is built, so the glyph lattice
-//                      itself bends like a picture tube; points that fall
-//                      outside the curved raster render black (the bezel).
+//  pre  (top of main): the surface is mapped onto a 4:3 picture tube —
+//                      fitted to the screen height, centered, padded, rounded
+//                      corners — then barrel-curvature + H-sync wobble bend
+//                      the glyph lattice inside it; points outside the tube
+//                      render black (the bezel).
 //  post (end of main): aperture-grille RGB mask (vertical phosphor
 //                      stripes), scanlines at a fixed line count, vignette
 //                      (corner falloff of a curved tube), a heavily
@@ -102,30 +103,46 @@ layout(std140, binding = 0) uniform buf {
 #define TRAILS      3   // concurrent trails per column
 
 // --- CRT-TUNING -----------------------------------------------------------
-#define CRT_CURVE     0.16   // barrel strength (0 = flat panel)
+#define CRT_TUBE_AR   1.3333 // tube aspect (4:3), letterboxed on wide screens
+#define CRT_PAD       0.035  // padding around the tube (fraction of height)
+#define CRT_ROUND     0.12   // tube corner rounding (tube-local units)
+#define CRT_CURVE     0.045  // barrel strength (0 = flat panel)
 #define CRT_WOBBLE    0.0022 // horizontal sync wobble amplitude (uv units)
-#define CRT_SCANLINES 750.0  // scanline count over the surface height
+#define CRT_SCANLINES 750.0  // scanline count over the tube height
 #define CRT_SCAN_W    0.42   // scanline darkening depth (0..1)
-#define CRT_MASK      1800.0 // aperture-grille stripes across the width
+#define CRT_MASK      1800.0 // aperture-grille stripes across the tube width
 #define CRT_MASK_W    0.10   // grille color-modulation depth (0..1)
 #define CRT_VIGNETTE  0.28   // corner falloff strength
 #define CRT_FLICKER   0.015  // mains-hum flicker amplitude
 #define CRT_GLOW      0.55   // extra phosphor glow radius added to bold glyphs
 
-// Barrel-distorted, wobble-jittered screen coordinate + out-of-raster flag.
-// Returns the uv the xmatrix grid should sample at; sets crtIn = 0 when the
-// point falls outside the curved raster (black bezel).
+// Maps the surface onto a 4:3 picture tube fitted to the screen height and
+// centered (letterboxed with CRT_PAD on wide screens), with rounded corners
+// and a gentle barrel bulge + H-sync wobble. Everything outside the tube is
+// bezel: crtIn = 0 there and the caller renders black. Returns the
+// tube-local uv in [0,1] that the xmatrix grid should sample at.
 float crtIn;
 vec2 crtMap(vec2 uv, float t)
 {
+    // physical coords centered on the surface, height = 1
+    vec2 c = (uv - 0.5) * vec2(aspect, 1.0);
+    float th = 1.0 - 2.0 * CRT_PAD;                 // tube height (physical)
+    float hw = th * CRT_TUBE_AR * 0.5;
+    float hh = th * 0.5;
+    vec2 p = vec2(c.x / hw, c.y / hh);              // tube-local [-1,1]
+
+    // rounded-corner bezel mask on the undistorted tube
+    vec2 q = abs(p) - (1.0 - CRT_ROUND);
+    crtIn = 1.0 - smoothstep(-0.004, 0.004,
+                             length(max(q, 0.0)) + min(max(q.x, q.y), 0.0)
+                             - CRT_ROUND);
+
     // sync wobble: slow sine plus a faster ripple, like a drifting H-sync
-    float wob = CRT_WOBBLE * (sin(t * 2.1) + 0.4 * sin(t * 23.7));
-    vec2 c = (uv - 0.5) * vec2(2.0, 2.0);
-    c.x += wob;
-    float r2 = dot(c, c);
-    c *= 1.0 + CRT_CURVE * r2;                 // barrel bulge
-    crtIn = step(abs(c.x), 1.0) * step(abs(c.y), 1.0);
-    return c * 0.5 + 0.5;
+    p.x += CRT_WOBBLE * (sin(t * 2.1) + 0.4 * sin(t * 23.7)) / hw;
+    float r2 = dot(p, p);
+    p *= 1.0 + CRT_CURVE * r2;                 // gentle barrel bulge
+    crtIn *= step(abs(p.x), 1.0) * step(abs(p.y), 1.0);
+    return p * 0.5 + 0.5;
 }
 
 // --- hash: splitmix-style, integer key in, float [0,1) out -----------------
@@ -311,8 +328,9 @@ void main()
     float scan = 0.5 + 0.5 * sin(uv.y * CRT_SCANLINES * 6.283185);
     col *= 1.0 - CRT_SCAN_W * (1.0 - smoothstep(0.15, 0.85, scan));
 
-    // Vignette: corners of a curved tube catch less beam.
-    vec2 vc = (qt_TexCoord0 - 0.5) * 2.0;
+    // Vignette: corners of a curved tube catch less beam. Uses the tube-local
+    // coordinate (uv is tube-space after crtMap), so it follows the tube.
+    vec2 vc = (uv - 0.5) * 2.0;
     col *= 1.0 - CRT_VIGNETTE * dot(vc, vc) * 0.5;
 
     // Mains-hum flicker: a fast ~100 Hz-ish beat plus a slow brightness
