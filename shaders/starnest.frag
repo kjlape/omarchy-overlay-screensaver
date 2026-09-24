@@ -37,7 +37,7 @@ void main()
 {
     // get coords and direction
     vec2 p = qt_TexCoord0 - 0.5;
-    p.y *= aspect;
+    p.x *= aspect; // widen the horizontal fov on wide screens; p.y would stretch x
     vec3 dir = vec3(p * zoom, 1.0);
     float t = time * speed + 0.25;
 
