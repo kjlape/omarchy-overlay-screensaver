@@ -88,8 +88,8 @@ With no `image`, the overlay falls back to the current omarchy background
 (`~/.local/state/omarchy/current/background`). `shader` selects the GLSL
 hack used as the **default** by the `shader` command (see below); an explicit
 name argument (`omarchy-overlay-screensaver shader universeball`) always
-wins. Run `omarchy-overlay-screensaver shaders` for the list of available
-hacks — currently `starnest` and `universeball`.
+wins. Run `omarchy-overlay-screensaver shaders` for the live list of
+available hacks (all of them are also listed below).
 
 ## Shader hacks
 
@@ -116,6 +116,12 @@ unknown names are rejected without showing anything. Current ports:
   relicensed by permission; upstream xscreensaver ships it as
   `hacks/glx/glsl/downfall.glsl`) — cascading pillar-like structures in a
   raymarched descent.
+- **trizm** — Trizm by Matt Vianueva
+  ([shadertoy.com/view/3fcBD8](https://www.shadertoy.com/view/3fcBD8), MIT
+  relicensed by permission; upstream xscreensaver ships it as
+  `hacks/glx/glsl/trizm.glsl`) — a twisting tunnel of triangle-wave
+  conduits (inspired by @OldEclipse's "Cyber Conduits"), raymarched with
+  an `asin(sin(x))` triangle-wave distortion.
 
 GLSL sources live in `shaders/`; the baked `.qsb` files are rebuilt with
 `/usr/lib/qt6/bin/qsb --glsl "100,120,150,330,440" <in> -o <in>.qsb`.
