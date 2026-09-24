@@ -137,7 +137,7 @@ doubles as the reference for the 1→N step: `showShader` takes the shader
 name as its first argument (empty = configured default), the CLI grew
 `shader [NAME]` and `shaders`, and `status` now reports the full registry.
 
-### Porting tips (learned porting `starnest` + `universeball`)
+### Porting tips (learned porting `starnest`, `universeball`, `topologica`)
 
 Hard-won, in rough order of when they bite:
 
@@ -176,12 +176,46 @@ Hard-won, in rough order of when they bite:
 8. **CLI edits need `install.sh`** — the PATH copy at `~/.local/bin` is a
    copy, not a symlink; plugin QML is hot-reloaded (symlinked install),
    the CLI is not.
+9. **Check which coordinate mapping upstream uses before copying the
+   conversion block.** The universeball gotcha (tip 1) applies to the
+   `res.y`-normalized family, `u = (2·fragCoord − res)/res.y`. Topologica
+   instead maps `uv = fragCoord/res·2 − 1` (a plain `[−1,1]` square) and
+   handles aspect inside the camera basis (`uv.x · sideNorm · aspect`) —
+   for that family the correct port is `u = 2·qt_TexCoord0 − 1` plus the
+   y flip, no `vec2(aspect,1)` scaling at all. Read the upstream
+   `fragCoord → uv` line first; picking the wrong family produces the same
+   skew symptoms as tip 7.
+10. **Re-base upstream runtime-state tricks on uniforms you actually
+   have.** Shadertoy-only inputs (`iFrame`, `iMouse`, `iChannel*`) appear
+   in non-obvious places — topologica's anti-unroll `ZERO_TRICK` was
+   `max(0, -iFrame)`, re-based on the `time` uniform as
+   `max(0, -int(time))` (note the explicit `int()` cast; the float isn't
+   implicit in GLSL 440). Grep the source for every `i*` uniform before
+   porting, not just the obvious `iMouse` in the camera block.
+11. **When dropping `iMouse`, keep the time-driven terms, don't zero the
+   whole angle.** `mx = iMouse.x/res.x·2π + iTime·0.01` becomes just
+   `time · 0.01` — the camera still drifts/orbits naturally instead of
+   freezing. Mark each substitution inline with the `// jwz: was … —
+   mouse dropped` convention so the diff against upstream stays
+   reviewable (see `shaders/topologica.frag` for the pattern).
+12. **Bake immediately after writing the GLSL.** `qsb` catches syntax
+    typos (a stray `1.0_`) in seconds — far cheaper than discovering them
+    after a shell restart + auto-hide test cycle. Treat
+    `qsb && qsb` as part of writing the file, not a separate step
+    (per-program checklist steps 4–5).
+13. **`status` is a no-visual smoke test.** After the first show, the
+    JSON keeps `mode`/`shader` even once hidden — use it to confirm the
+    registry entry and name resolution (`shaders` verb + `status`) before
+    spending a show cycle on a possibly-broken port.
 
 Cross-references: the bake/reload/hot-reload mechanics are documented in
 [ARCHITECTURE.md](ARCHITECTURE.md) “Shader content”; the diagnostic ladder
 for blank overlays in [troubleshooting.md](troubleshooting.md); the
-per-program checklist above; and `shaders/universeball.frag`'s header is
-the canonical copy-paste source for the conversion block.
+per-program checklist above; `shaders/universeball.frag`'s header is
+the canonical copy-paste source for the conversion block (tip 1's
+`res.y`-normalized family — see tip 9 for the other family); and
+`shaders/topologica.frag` is the reference for the plain `[−1,1]`
+mapping, `iMouse`-drop substitutions, and the `ZERO_TRICK` re-base.
 
 ### Estimated effort
 
