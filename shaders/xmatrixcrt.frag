@@ -21,12 +21,17 @@
 //                      fitted to the screen height, centered, padded, rounded
 //                      corners — then barrel-curvature + H-sync wobble bend
 //                      the glyph lattice inside it; points outside the tube
-//                      render black (the bezel).
+//                      land on the bezel.
 //  post (end of main): aperture-grille RGB mask (vertical phosphor
 //                      stripes), scanlines at a fixed line count, vignette
 //                      (corner falloff of a curved tube), a heavily
 //                      attenuated mains-hum flicker, and a mild phosphor
 //                      glow that fattens the glyphs' soft dots.
+//  bezel (last step):  the surround is no longer black but dim beige
+//                      plastic — the monitor chassis lit only by the
+//                      raster's own spill: brightens toward the glass, a
+//                      thin recess shadow at the edge, faint molded grain,
+//                      and the same hum flicker as the tube.
 //
 // Everything between pre and post is identical to xmatrix.frag — if the
 // engine changes there, either mirror it here or accept that this is a
@@ -115,13 +120,19 @@ layout(std140, binding = 0) uniform buf {
 #define CRT_VIGNETTE  0.28   // corner falloff strength
 #define CRT_FLICKER   0.015  // mains-hum flicker amplitude
 #define CRT_GLOW      0.55   // extra phosphor glow radius added to bold glyphs
+#define CRT_BEZEL_COL vec3(0.112, 0.096, 0.062) // unlit beige plastic, dark room
+#define CRT_BEZEL_LIT 2.3    // plastic brightening at the raster edge (x)
+#define CRT_BEZEL_FALL 26.0  // phosphor spill falloff (per tube-local unit)
+#define CRT_BEZEL_EDGE 0.42  // recess shadow depth right at the glass edge
+#define CRT_BEZEL_SPILL 0.12 // moving phosphor light landing on the plastic
 
 // Maps the surface onto a 4:3 picture tube fitted to the screen height and
 // centered (letterboxed with CRT_PAD on wide screens), with rounded corners
 // and a gentle barrel bulge + H-sync wobble. Everything outside the tube is
 // bezel: crtIn = 0 there and the caller renders black. Returns the
 // tube-local uv in [0,1] that the xmatrix grid should sample at.
-float crtIn;
+float crtIn;   // 1 inside the raster, 0 on the bezel
+float crtSd;   // signed distance to the glass edge (negative inside, tube-local)
 vec2 crtMap(vec2 uv, float t)
 {
     // physical coords centered on the surface, height = 1
@@ -131,11 +142,11 @@ vec2 crtMap(vec2 uv, float t)
     float hh = th * 0.5;
     vec2 p = vec2(c.x / hw, c.y / hh);              // tube-local [-1,1]
 
-    // rounded-corner bezel mask on the undistorted tube
+    // rounded-corner bezel mask on the undistorted tube; the same signed
+    // distance (negative inside) also drives the bezel's screen-glow spill
     vec2 q = abs(p) - (1.0 - CRT_ROUND);
-    crtIn = 1.0 - smoothstep(-0.004, 0.004,
-                             length(max(q, 0.0)) + min(max(q.x, q.y), 0.0)
-                             - CRT_ROUND);
+    crtSd = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - CRT_ROUND;
+    crtIn = 1.0 - smoothstep(-0.004, 0.004, crtSd);
 
     // sync wobble: slow sine plus a faster ripple, like a drifting H-sync
     p.x += CRT_WOBBLE * (sin(t * 2.1) + 0.4 * sin(t * 23.7)) / hw;
@@ -333,10 +344,28 @@ void main()
     vec2 vc = (uv - 0.5) * 2.0;
     col *= 1.0 - CRT_VIGNETTE * dot(vc, vc) * 0.5;
 
+    // ---- bezel: dim beige plastic, lit only by the tube's own glow ----
+    float bd = max(crtSd, 0.0);              // distance out from the glass
+    float spill = exp(-bd * CRT_BEZEL_FALL); // phosphor spill, 1/e within ~1 cm
+    // the curved glass sits slightly proud of the plastic: a thin recess
+    // shadow hugs the raster before the spill takes over
+    float edge = 1.0 - CRT_BEZEL_EDGE * exp(-bd * 260.0);
+    // faint molded grain so the chassis never reads as a flat color field
+    float grain = hf(uint(qt_TexCoord0.x * 4093.0) * 7919u
+                   + uint(qt_TexCoord0.y * 3061.0) * 131u);
+    // spill is green phosphor light on beige plastic: brighter, and greener,
+    // the closer it sits to the raster
+    vec3 bezel = CRT_BEZEL_COL * (0.92 + 0.16 * grain)
+               * mix(1.0, CRT_BEZEL_LIT, spill)
+               * mix(vec3(1.0), vec3(0.94, 1.03, 0.62), spill)
+               * edge;
+    // heads sweeping past the outer rows throw a little moving light on it
+    bezel += CRT_BEZEL_SPILL * spill * clamp(col, 0.0, 1.0);
+
     // Mains-hum flicker: a fast ~100 Hz-ish beat plus a slow brightness
     // wander, both heavily attenuated so it reads as a tube, not a strobe.
-    col *= 1.0 + CRT_FLICKER * (sin(time * 628.3) * 0.5 + sin(time * 3.7) * 0.5);
-
-    col *= crtIn;                            // bezel: black outside the tube
+    // The bezel breathes with it — its only light source is the tube.
+    col = mix(bezel, col, crtIn)
+        * (1.0 + CRT_FLICKER * (sin(time * 628.3) * 0.5 + sin(time * 3.7) * 0.5));
     fragColor = vec4(col, 1.0);              // tip 18: the surface composites alpha
 }
