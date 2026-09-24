@@ -64,7 +64,8 @@ Item {
     "downfall": "shaders/downfall.frag.qsb",
     "trizm": "shaders/trizm.frag.qsb",
     "hexplasma": "shaders/hexplasma.frag.qsb",
-    "stardome": "shaders/stardome.frag.qsb"
+    "stardome": "shaders/stardome.frag.qsb",
+    "rigrekt": "shaders/rigrekt.frag.qsb"
   })
   readonly property string configuredShader: String(cfg("shader", "starnest")).trim()
 

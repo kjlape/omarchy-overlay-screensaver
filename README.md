@@ -128,6 +128,11 @@ unknown names are rejected without showing anything. Current ports:
   a slow-panning night-sky dome: layered starfield, galaxy band, moon,
   spherical grid, and horizon glow over a black ground plane; loops on a
   gentle 30 s fade cycle.
+- **rigrekt** — Rig Rekt by Matt Vianueva
+  ([shadertoy.com/view/3XKfDV](https://www.shadertoy.com/view/3XKfDV), MIT
+  relicensed by permission; upstream xscreensaver ships it as
+  `hacks/glx/glsl/rigrekt.glsl`) — a tunnel of boxes with a twisting
+  pattern of rings.
 
 GLSL sources live in `shaders/`; the baked `.qsb` files are rebuilt with
 `/usr/lib/qt6/bin/qsb --glsl "100,120,150,330,440" <in> -o <in>.qsb`.

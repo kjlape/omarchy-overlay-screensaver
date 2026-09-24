@@ -61,7 +61,7 @@ All files are single-pass `mainImage` shaders unless noted. Verified from the lo
 | 6 | `downfall.glsl` | Downfall | Matt Vianueva (MIT, relicensed) | 35 lines | ✅ Done |
 | 7 | `trizm.glsl` | Trizm | Matt Vianueva (MIT, relicensed) | ✅ Done — 64 lines; per-pixel start-distance dither re-based on converted uv (no pixel-resolution uniform); `o *= i` golf dropped | ✅ Done |
 | 8 | `hexplasma.glsl` | Hex Plasma | Nemerix (MIT) | 57 lines | ✅ Done — cleanest port yet: no `iMouse`, no textures, `res.y`-normalized coordinate family (universeball conversion block verbatim); only edits were the uniform block, `iTime` → `time`, and the y flip |
-| 9 | `rigrekt.glsl` | Rigrekt | Matt Vianueva (MIT, relicensed) | 61 lines | 🟡 Medium |
+| 9 | `rigrekt.glsl` | Rigrekt | Matt Vianueva (MIT, relicensed) | 61 lines | ✅ Done — 115 lines, clean port with one `iMouse`-drop (time-driven camera drift) | ✅ |
 | 10 | `batteredplanet.glsl` | Battered Planet | mrange (CC0) | 355 lines, raymarched | 🟡 Medium |
 | 11 | `goldenapollian.glsl` | Golden Apollian | mrange (CC0) | 383 lines | 🟡 Medium |
 | 12 | `selfreflect.glsl` | Self Reflect | mrange (CC0, mixed credits) | borrowings under WTFPL/MIT/unknown — check embedded credit lines | 🟡 Medium |
@@ -240,6 +240,13 @@ Hard-won, in rough order of when they bite:
     (Bake fades into account: a shader with an upstream `mod(iTime)`
     loop + fade gates — stardome — is black at cycle edges; capture
     mid-cycle.)
+
+**New tip learned from rigrekt (port #9):**
+
+17. **The `R` macro needs to be defined properly in the fragment shader.**
+    Some shaders use custom macros like `#define R(a) mat2(cos(a + vec4(0,33,11,0)))`
+    which must be properly included in the fragment shader for the shader to compile. This
+    was found during the port of `rigrekt.glsl`.
 
 Cross-references: the bake/reload/hot-reload mechanics are documented in
 [ARCHITECTURE.md](ARCHITECTURE.md) “Shader content”; the diagnostic ladder
