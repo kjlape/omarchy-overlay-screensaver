@@ -111,6 +111,11 @@ unknown names are rejected without showing anything. Current ports:
   ([shadertoy.com/view/4djXzz](https://www.shadertoy.com/view/4djXzz), CC0;
   upstream xscreensaver ships it as `hacks/glx/glsl/topologica.glsl`) —
   a slow orbit around a pulsing volumetric noise nebula.
+- **downfall** — Downfall by Matt Vianueva
+  ([shadertoy.com/view/w3sBWl](https://www.shadertoy.com/view/w3sBWl), MIT
+  relicensed by permission; upstream xscreensaver ships it as
+  `hacks/glx/glsl/downfall.glsl`) — cascading pillar-like structures in a
+  raymarched descent.
 
 GLSL sources live in `shaders/`; the baked `.qsb` files are rebuilt with
 `/usr/lib/qt6/bin/qsb --glsl "100,120,150,330,440" <in> -o <in>.qsb`.

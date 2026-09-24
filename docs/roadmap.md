@@ -11,7 +11,7 @@ The "run all 270 hacks" moonshot via Xvfb is tracked separately under `moonshots
 ## Status
 
 - [x] Phase 0: porting recipe established (`starnest`)
-- [~] Phase 1: xscreensaver `glx/glsl/` collection (32 programs, 38 files — verified against local 6.16 tree). In progress: 4/32 ported (`starnest`, `universeball`, `topologica`, `synthwavecity`). The `universeball` port also landed the multi-shader API — `showShader(name, source)`, `shader [NAME]` / `shaders` CLI verbs — so future ports need no Service.qml changes beyond a `knownShaders` entry.
+- [~] Phase 1: xscreensaver `glx/glsl/` collection (32 programs, 38 files — verified against local 6.16 tree). In progress: 5/32 ported (`starnest`, `universeball`, `topologica`, `synthwavecity`, `downfall`). The `universeball` port also landed the multi-shader API — `showShader(name, source)`, `shader [NAME]` / `shaders` CLI verbs — so future ports need no Service.qml changes beyond a `knownShaders` entry.
 - [] Phase 2: curated shadertoy.com picks (30–50 programs)
 - [ ] Phase 3: config + UX integration
 - [ ] Phase 4: tooling (batch conversion, shader gallery)
@@ -58,7 +58,7 @@ All files are single-pass `mainImage` shaders unless noted. Verified from the lo
 | 3 | `stardome.glsl` | Stardome | mrange (CC0) | 300 lines | 🔴 High |
 | 4 | `universeball.glsl` | Universe Ball | Matt Vianueva (MIT, relicensed) | 43 lines, trivial port | ✅ Done |
 | 5 | `bubblecolors.glsl` | Bubble Colors | Matt Vianueva (license **unverified** — no statement in file) | 23 lines | 🔴 High |
-| 6 | `downfall.glsl` | Downfall | Matt Vianueva (MIT, relicensed) | 35 lines | 🔴 High |
+| 6 | `downfall.glsl` | Downfall | Matt Vianueva (MIT, relicensed) | 35 lines | ✅ Done |
 | 7 | `trizm.glsl` | Trizm | Matt Vianueva (MIT, relicensed) | 64 lines | 🔴 High |
 | 8 | `hexplasma.glsl` | Hex Plasma | Nemerix (MIT) | 57 lines | 🔴 High |
 | 9 | `rigrekt.glsl` | Rigrekt | Matt Vianueva (MIT, relicensed) | 61 lines | 🟡 Medium |

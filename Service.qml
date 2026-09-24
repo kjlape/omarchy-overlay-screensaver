@@ -60,7 +60,8 @@ Item {
     "starnest": "shaders/starnest.frag.qsb",
     "universeball": "shaders/universeball.frag.qsb",
     "topologica": "shaders/topologica.frag.qsb",
-    "synthwavecity": "shaders/synthwavecity.frag.qsb"
+    "synthwavecity": "shaders/synthwavecity.frag.qsb",
+    "downfall": "shaders/downfall.frag.qsb"
   })
   readonly property string configuredShader: String(cfg("shader", "starnest")).trim()
 
