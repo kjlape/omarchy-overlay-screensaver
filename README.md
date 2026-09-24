@@ -107,12 +107,16 @@ unknown names are rejected without showing anything. Current ports:
   ([shadertoy.com/view/WcGcWV](https://www.shadertoy.com/view/WcGcWV), MIT
   relicensed by permission; upstream xscreensaver ships it as
   `hacks/glx/glsl/universeball.glsl`) — a marble-planet miniverse flythrough.
+- **topologica** — Topologica by otaviogood
+  ([shadertoy.com/view/4djXzz](https://www.shadertoy.com/view/4djXzz), CC0;
+  upstream xscreensaver ships it as `hacks/glx/glsl/topologica.glsl`) —
+  a slow orbit around a pulsing volumetric noise nebula.
 
 GLSL sources live in `shaders/`; the baked `.qsb` files are rebuilt with
 `/usr/lib/qt6/bin/qsb --glsl "100,120,150,330,440" <in> -o <in>.qsb`.
 See [docs/roadmap.md](docs/roadmap.md) for the full porting plan, recipe,
 and the porting-tips list (coordinate conversion, testing loop) learned
-from the first two ports.
+from the ports so far.
 
 ## IPC surface
 

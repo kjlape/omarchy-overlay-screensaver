@@ -11,7 +11,7 @@ The "run all 270 hacks" moonshot via Xvfb is tracked separately under `moonshots
 ## Status
 
 - [x] Phase 0: porting recipe established (`starnest`)
-- [~] Phase 1: xscreensaver `glx/glsl/` collection (32 programs, 38 files — verified against local 6.16 tree). In progress: 2/32 ported (`starnest`, `universeball`). The `universeball` port also landed the multi-shader API — `showShader(name, source)`, `shader [NAME]` / `shaders` CLI verbs — so future ports need no Service.qml changes beyond a `knownShaders` entry.
+- [~] Phase 1: xscreensaver `glx/glsl/` collection (32 programs, 38 files — verified against local 6.16 tree). In progress: 3/32 ported (`starnest`, `universeball`, `topologica`). The `universeball` port also landed the multi-shader API — `showShader(name, source)`, `shader [NAME]` / `shaders` CLI verbs — so future ports need no Service.qml changes beyond a `knownShaders` entry.
 - [] Phase 2: curated shadertoy.com picks (30–50 programs)
 - [ ] Phase 3: config + UX integration
 - [ ] Phase 4: tooling (batch conversion, shader gallery)
@@ -54,7 +54,7 @@ All files are single-pass `mainImage` shaders unless noted. Verified from the lo
 | # | File(s) | Program | Author (license) | Notes | Priority |
 |---|---|---|---|---|---|
 | 1 | `starnest.glsl` | Star Nest | Kali (MIT) | ✅ Done | ✅ |
-| 2 | `topologica.glsl` | Topologica | ? (see file header) | uses `iMouse` — replace with time-driven animation | 🔴 High |
+| 2 | `topologica.glsl` | Topologica | otaviogood (CC0) | ✅ Done — `iMouse` dropped; camera drifts on `time` alone; anti-unroll trick re-based on `time` | ✅ |
 | 3 | `stardome.glsl` | Stardome | mrange (CC0) | 300 lines | 🔴 High |
 | 4 | `universeball.glsl` | Universe Ball | Matt Vianueva (MIT, relicensed) | 43 lines, trivial port | ✅ Done |
 | 5 | `bubblecolors.glsl` | Bubble Colors | Matt Vianueva (license **unverified** — no statement in file) | 23 lines | 🔴 High |

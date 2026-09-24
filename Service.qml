@@ -58,7 +58,8 @@ Item {
   // four shader files) is all a new port needs — see docs/roadmap.md.
   readonly property var knownShaders: ({
     "starnest": "shaders/starnest.frag.qsb",
-    "universeball": "shaders/universeball.frag.qsb"
+    "universeball": "shaders/universeball.frag.qsb",
+    "topologica": "shaders/topologica.frag.qsb"
   })
   readonly property string configuredShader: String(cfg("shader", "starnest")).trim()
 
