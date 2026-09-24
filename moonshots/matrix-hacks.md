@@ -5,8 +5,15 @@ Assessment of the two "Matrix" hacks vendored at
 xscreensaver 6.16 release) and how portable they are to this
 overlay-screensaver stack. Verified 2026-09-24 against the 6.16 sources.
 
-Not implemented. Research + comparison + options only; the recommendation at
-the end is a suggested order of operations, not a commitment.
+**Status: Path A1 shipped 2026-09-24** — `xmatrix`'s default rain exists as
+[`shaders/xmatrix.frag`](../shaders/xmatrix.frag) (`shader xmatrix`); see
+[docs/roadmap.md](../docs/roadmap.md#non-glsl-sources-phase-1b-reimplementations-from-the-c-hacks)
+for the port notes and tips 19–21. `glmatrix` (A2) and the Xvfb pilot (B) are
+still just options. Everything below is the original research, kept as written.
+
+Not implemented at the time of writing. Research + comparison + options only;
+the recommendation at the end is a suggested order of operations, not a
+commitment.
 
 ## Inventory
 

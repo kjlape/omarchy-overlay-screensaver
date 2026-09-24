@@ -8,9 +8,11 @@ A Quickshell **service plugin for omarchy-shell** (Omarchy 4+): it draws a
 full-screen overlay above every window via a Wayland layer-shell surface on
 `WlrLayer.Top`, controllable over IPC from ssh/another TTY. Two content
 modes: a static image (defaults to the current omarchy background) or a
-ported GLSL "shader hack" rendered by an in-process `ShaderEffect` — 8
-ported so far, with ~24 more on the roadmap. Manual show/hide, no idle
-trigger (deliberate — do not fight omarchy's built-in screensaver).
+ported GLSL "shader hack" rendered by an in-process `ShaderEffect` — 10
+ported so far (9 from xscreensaver's `glx/glsl/` set, plus `xmatrix`
+reimplemented from its C source), with ~23 more on the roadmap. Manual
+show/hide, no idle trigger (deliberate — do not fight omarchy's built-in
+screensaver).
 
 ## Read before changing code
 
@@ -50,7 +52,8 @@ verified against the shell source; deliberately not yet implemented).
 | File | Role |
 |---|---|
 | `Service.qml` | The whole plugin: overlay surfaces (`Variants` → `PanelWindow` per monitor), config lookup, shader content mode, `IpcHandler` (`show`/`shader`/`hide`/`toggle`/`status`/`kill`). Read it in full. |
-| `shaders/` | Ported GLSL hacks (8: starnest, universeball, topologica, synthwavecity, downfall, trizm, hexplasma, stardome) — Vulkan-style GLSL sources + baked `.qsb` per stage. `universeball.frag` and `topologica.frag` headers are the canonical coordinate-conversion references. |
+| `shaders/` | Ported GLSL hacks (10: starnest, universeball, topologica, synthwavecity, downfall, trizm, hexplasma, stardome, rigrekt, xmatrix) — Vulkan-style GLSL sources + baked `.qsb` per stage. `universeball.frag` and `topologica.frag` headers are the canonical coordinate-conversion references; `xmatrix.frag` is the reference for the reimplementation class (no upstream shader). |
+| `tools/shadercheck.qml` | Offline frame grabs: renders any baked `.qsb` pair at chosen times without the overlay going up (roadmap tip 21). |
 | `manifest.json` | Plugin identity `kjlape.overlay-screensaver`, service-only, `keepLoaded: true`. Schema is Omarchy's; validate with `omarchy plugin validate .` |
 | `bin/omarchy-overlay-screensaver` | CLI wrapper. Its real job is rebuilding `XDG_RUNTIME_DIR`/`OMARCHY_PATH` so the IPC call works from non-interactive ssh. |
 | `install.sh` / `uninstall.sh` | CLI-on-PATH only. The plugin itself is installed via `omarchy plugin add <repo> --enable` — these scripts never touch `~/.config/omarchy/`. |
@@ -83,6 +86,9 @@ verified against the shell source; deliberately not yet implemented).
 
 ```bash
 omarchy plugin validate .                 # manifest check — run after every manifest edit
+# offline render check of a baked port — no overlay, no restart:
+QT_QUICK_BACKEND=opengl QT_QPA_PLATFORM=offscreen \
+  /usr/lib/qt6/bin/qml tools/shadercheck.qml <name> 1280 800   # → /tmp/shadercheck-<name>-N.png
 # dev-install as a symlink (survives edits, hot-reloads):
 ln -sfn "$PWD" ~/.config/omarchy/plugins/kjlape.overlay-screensaver
 omarchy plugin enable kjlape.overlay-screensaver
@@ -143,6 +149,8 @@ idiom-golf unpacking). The condensed loop, verified working:
    and verify with a `grim` capture mid-window (view it directly, or
    ImageMagick region means for orientation: horizon/ground should be at
    the bottom). Skew/stretch = conversion math (tip 7), not the algorithm.
+   Do the tuning iterations offline with `tools/shadercheck.qml` instead
+   (tip 21) — it grabs the same baked `.qsb` without covering the screen.
 8. Journal check for GL errors, docs update (roadmap row + status count,
    README port list), commit.
 

@@ -133,6 +133,13 @@ unknown names are rejected without showing anything. Current ports:
   relicensed by permission; upstream xscreensaver ships it as
   `hacks/glx/glsl/rigrekt.glsl`) — a tunnel of boxes with a twisting
   pattern of rings.
+- **xmatrix** — Matrix (digital rain), Jamie Zawinski
+  (xscreensaver's `hacks/xmatrix.c`, © 1999–2018, jwz BSD-style notice) —
+  the only port here that isn't a shader upstream: the C screensaver's
+  falling-glyph grid reimplemented as a stateless fragment shader, with
+  hand-drawn 5×7 katakana-ish glyphs (the upstream glyph bitmaps are
+  license-ambiguous, so none are shipped or sampled). See
+  [docs/roadmap.md](docs/roadmap.md#non-glsl-sources-phase-1b-reimplementations-from-the-c-hacks).
 
 GLSL sources live in `shaders/`; the baked `.qsb` files are rebuilt with
 `/usr/lib/qt6/bin/qsb --glsl "100,120,150,330,440" <in> -o <in>.qsb`.

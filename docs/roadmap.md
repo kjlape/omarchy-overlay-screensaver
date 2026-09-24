@@ -11,7 +11,8 @@ The "run all 270 hacks" moonshot via Xvfb is tracked separately under `moonshots
 ## Status
 
 - [x] Phase 0: porting recipe established (`starnest`)
-- [~] Phase 1: xscreensaver `glx/glsl/` collection (32 programs, 38 files — verified against local 6.16 tree). In progress: 8/32 ported (`starnest`, `universeball`, `topologica`, `synthwavecity`, `downfall`, `trizm`, `hexplasma`, `stardome`). The `universeball` port also landed the multi-shader API — `showShader(name, source)`, `shader [NAME]` / `shaders` CLI verbs — so future ports need no Service.qml changes beyond a `knownShaders` entry.
+- [~] Phase 1: xscreensaver `glx/glsl/` collection (32 programs, 38 files — verified against local 6.16 tree). In progress: 9/32 ported (`starnest`, `universeball`, `topologica`, `synthwavecity`, `downfall`, `trizm`, `hexplasma`, `stardome`, `rigrekt`). The `universeball` port also landed the multi-shader API — `showShader(name, source)`, `shader [NAME]` / `shaders` CLI verbs — so future ports need no Service.qml changes beyond a `knownShaders` entry.
+- [~] Phase 1b: hacks that are **not** GLSL sources, reimplemented as shaders from their C algorithms (see tip 19). In progress: 1 (`xmatrix`, digital rain, from `hacks/xmatrix.c`; feasibility study in [moonshots/matrix-hacks.md](../moonshots/matrix-hacks.md)). `glmatrix` (the 3D title-sequence variant) is the same class and is deliberately not scheduled — that report defers it.
 - [] Phase 2: curated shadertoy.com picks (30–50 programs)
 - [ ] Phase 3: config + UX integration
 - [ ] Phase 4: tooling (batch conversion, shader gallery)
@@ -85,6 +86,16 @@ All files are single-pass `mainImage` shaders unless noted. Verified from the lo
 | 30 | `neongravity-0.glsl`, `neongravity-1.glsl` | Neon Gravity | mrange (CC0, mixed credits) | **2-pass** (pass 0 uses 11 texture refs); needs framebuffer ping-pong or merged single-pass rewrite | 🟢 Lower |
 | 31 | `bestill0-0.glsl` … `bestill5-0.glsl` | Bestill | Matt Vianueva (MIT, relicensed) | **6-pass** — needs multi-`ShaderEffect` chain; largest single effort | 🟢 Lower |
 | 32 | `amigajuggler.glsl` | Amiga Juggler | Brian Bernstein, written for xscreensaver (license: xscreensaver's, effectively GPL — **verify before porting**) | 479 lines, single self-contained `mainImage` (the other `mainImage` match is a comment), procedural ray tracer | 🟢 Lower |
+
+### Non-`glsl` sources (Phase 1b: reimplementations from the C hacks)
+
+Not in the 32 above: these upstream hacks have no `.glsl` to port — the
+algorithm lives in C with per-frame state, and the shader *is* the port.
+
+| # | Upstream | Program | Author (license) | Notes | Priority |
+|---|---|---|---|---|---|
+| X1 | `hacks/xmatrix.c` (1914 lines, 2D X11 raster) | Matrix | Jamie Zawinski (jwz BSD-style notice, © 1999–2018) | ✅ Done — `shaders/xmatrix.frag`. Default `Matrix` mode only: falling columns of 5×7 glyphs, quantized one cell at a time, bright leading glyph, random glow flashes, spinners. Glyph shapes are hand-drawn data in the frag (tip 20) — the upstream atlases are ⚠️-licensed and would need a sampler (tip 19). Lost: tracePhone/knockKnock/pipe/crack modes, which are sequential behaviors, not the look. |
+| X2 | `hacks/glx/glmatrix.c` (fixed-function GL 3D) | GLMatrix | Jamie Zawinski (same notice) | Not scheduled — the 3D rain tunnel needs perspective-mapped strips whose z-motion is a pure function of `time`; the same report rates it 3–5 days and the hardest thing in the set. Reachable later via the Xvfb moonshot instead. | 🟢 Lower |
 
 ### Verified-facts summary (2026 check against 6.16 tree, now vendored)
 
@@ -259,6 +270,46 @@ Hard-won, in rough order of when they bite:
     through as well. Symptom to recognize: a "working" shader whose
     capture is just the desktop under a faint tint.
 
+**Tips learned from xmatrix (port #10, the first non-`glsl` reimplementation):**
+
+19. **A hack with no shader is still portable — as a reimplementation.**
+    `xmatrix.c` is X11 raster blitting over a persistent glyph grid; there is
+    nothing to copy. The move is to re-derive its *state* as a function of
+    `(time, aspect)`: per-column feeder → per-trail parameters from
+    `hash(column, trail)` (period, tail length, phase offset, rest fraction),
+    head row → `floor()` of a warped phase (so cells jump a row at a time —
+    jwz's own requirement, and what keeps it from looking like a smooth
+    gradient), cell content → `hash(column, trail, distance-behind-head)` so
+    glyphs ride rigidly with their trail instead of re-rolling as they fall.
+    Per-step random throttling can't accumulate statelessly; per-trail random
+    speed plus a small sinusoidal surge is the stand-in. Sequential/interactive
+    modes (pipe input, the phone trace) simply drop out. Budget a day and a
+    half for this class, not the 10–30 minutes of tip 12.
+20. **Prefer hand-drawn glyph data in the frag over a sampled atlas.** Qt 6
+    can bind a QML `Image` to a `sampler2D`, but doing that here would need a
+    new property on the shared `ShaderEffect` — i.e. a Service.qml change past
+    the registry entry, which the hard rules forbid — plus shipping the
+    ⚠️-license-class PNGs. Instead: 26 glyphs as `uvec2` literals in a
+    `switch` (5 bits per row × 7 rows, rows 0–5 in `.x`, row 6 in `.y`), one
+    `bitAt()` accessor, and a 9-tap soft-dot splat for the film's blurry
+    low-res look. A `switch` also sidesteps dynamic indexing of an array
+    entirely, and the plain/glow *radius* doubles as upstream's
+    PLAIN_MAP/GLOW_MAP pair (which is the same glyph drawn bolder, not a
+    different color — compare `vendor/xscreensaver/hacks/images/matrix1b.png`
+    with `matrix2b.png`). Hand-draw the shapes; do not transcribe the atlas.
+21. **Render offline before you cover the screen.**
+    `QT_QUICK_BACKEND=opengl QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml
+    tools/shadercheck.qml <name> 1280 800` loads the baked `.qsb` pair in a
+    plain Qt Quick `Window`, grabs frames at chosen times, and exits — no
+    shell restart, no overlay up, no `grim`, and it works for every port
+    already in the registry. Tuning loops (density, speed, blur radius) belong
+    here; the live auto-hide + `grim` test (tips 5, 16) is then the final
+    confirmation on real hardware. **The offscreen platform silently uses the
+    software backend, where a `ShaderEffect` renders nothing at all** — an all
+    black capture from the harness means you forgot `QT_QUICK_BACKEND=opengl`,
+    not that the port is broken. Qt 6 also mutes `console.log` unless
+    `QT_LOGGING_RULES=qml.debug=true`.
+
 Cross-references: the bake/reload/hot-reload mechanics are documented in
 [ARCHITECTURE.md](ARCHITECTURE.md) “Shader content”; the diagnostic ladder
 for blank overlays in [troubleshooting.md](troubleshooting.md); the
@@ -268,7 +319,9 @@ the canonical copy-paste source for the conversion block (tip 1's
 `shaders/topologica.frag` is the reference for the plain `[−1,1]`
 mapping, `iMouse`-drop substitutions, and the `ZERO_TRICK` re-base, and
 `shaders/stardome.frag` is the same family with the explicit post-map
-`p.x *= aspect` (tip 9's sub-variant).
+`p.x *= aspect` (tip 9's sub-variant). For the reimplementation class there is
+no upstream shader to diff against — `shaders/xmatrix.frag` is the reference:
+its header maps every kept behavior back to the C function it came from.
 
 ### Estimated effort
 
@@ -522,5 +575,6 @@ Keep attribution visible to the user via the IPC response:
 | `docs/roadmap.md` | This document |
 | `moonshots/xscreensaver-hacks.md` | Xvfb offscreen stage (Phase 2+) — tracks the 270-hack moonshot |
 | `shaders/` | Ported GLSL shaders + baked `.qsb` |
+| `tools/shadercheck.qml` | Offline frame grabs for a baked port (tip 21) |
 | `Service.qml` | `knownShaders` registry, `showShader()` |
 | `bin/omarchy-overlay-screensaver` | CLI: `showShader <name>`, `list-shaders` |
