@@ -77,6 +77,10 @@ Item {
   property bool togglesLoaded: false     // off/hold flags read at least once
   property bool configProbeRan: false    // own-config existence known
   property bool ownConfigExists: false
+  property bool configAdapterLoaded: false // set by the loaded SIGNAL, which
+  // fires only after the file is actually parsed — the `loaded` PROPERTY is
+  // isLoadedOrAsync and is already true during the async load, which would
+  // re-introduce the born-on-300-then-flip race
   property bool offFile: false           // our "never auto-show again" flag
   property bool holdFile: false          // our temporary stay-awake
   property bool stayAwakeLoaded: false   // Omarchy's indicator, read-only
@@ -96,41 +100,70 @@ Item {
   // quickshell recreates its underlying ext-idle-notify object when `timeout`
   // changes, and after that recreation the isIdle property stops updating
   // (observed on Quickshell 0.3.1 — events still arrive in C++, the QML
-  // property silently dies). Creating it once config is settled keeps the
-  // timeout constant for the monitor's lifetime; later autoEnabled toggles
-  // are plain enable/disable flips, which replay current idle state safely
-  // (the seenActiveEdge guard absorbs a replayed idle=true). If the config
-  // file appears or changes later (idleSeconds edit), recreateIdleMonitor()
-  // tears the monitor down and rebuilds it fresh, re-arming the guard so an
-  // edit made from ssh on an idle seat can't show.
-  function recreateIdleMonitor() {
-    root.seenActiveEdge = false
-    idleLoader.active = false
-    Qt.callLater(function () { idleLoader.active = root.idleConfigSettled })
-  }
+  // property silently dies). Enable/disable flips are safe (they replay
+  // current idle state safely; the seenActiveEdge guard absorbs a replayed
+  // idle=true). If the config file appears or changes later (idleSeconds
+  // edit), rearmIdleMonitor() disables and re-enables the monitor so its
+  // timeout is reborn correct, re-arming the guard so an edit made from ssh
+  // on an idle seat can't show.
+  function recreateIdleMonitor() { root.rearmIdleMonitor() }
 
   readonly property bool idleConfigSettled: togglesLoaded && configProbeRan
     && (stayAwakeLoaded || !respectStayAwake)
+    && (!ownConfigExists || configAdapterLoaded) // never arm before the config's
+    // idleSeconds is actually read — a monitor born on the 300s default that
+    // later flips to the configured value would hit the timeout-recreation
+    // bug and silently die (docs/troubleshooting.md)
 
-  Loader {
-    id: idleLoader
-    active: root.idleConfigSettled
-    sourceComponent: IdleMonitor {
-      id: idleMonitor
-      enabled: root.autoEnabled
-      timeout: root.idleSeconds
-      respectInhibitors: true // apps' zwp_idle_inhibitor_v1 suppresses us too
-      onIsIdleChanged: {
-        console.log("overlay-screensaver: idle=" + idleMonitor.isIdle
-          + " armed=" + root.seenActiveEdge + " auto=" + root.autoEnabled)
-        if (!idleMonitor.isIdle) {
-          root.seenActiveEdge = true // observed activity; we may auto-show next idle
-          return
-        }
-        if (!root.seenActiveEdge) return // armed on first activity edge, never at load
-        if (!root.overlayVisible)
-          root.showShader(root.configuredShader, "idle")
+  // IdleMonitor lifecycle: statically declared, toggled via `enabled` only.
+  // Do NOT create it in a Loader after startup — on Quickshell 0.3.1 a
+  // monitor instantiated mid-session (Loader active flip) has a silently
+  // dead isIdle property even though it exists and is enabled (verified:
+  // a statically-created monitor in the same process fires; the Loader one
+  // never does — docs/troubleshooting.md). Enable/disable flips are safe
+  // (they replay current idle state; the seenActiveEdge guard absorbs a
+  // replayed idle=true). The timeout binding may only change while the
+  // monitor is DISABLED (impl destroyed) — rearmIdleMonitor() enforces the
+  // dance for config edits; a timeout change on a live monitor also kills it.
+  property bool idleMonitorGate: false // the actual enabled binding
+  readonly property bool idleMonitorWanted: autoEnabled && idleConfigSettled
+  onIdleMonitorWantedChanged: {
+    if (!idleMonitorWanted) {
+      seenActiveEdge = false
+      idleMonitorGate = false
+    } else
+      idleRearmTimer.restart()
+  }
+  function rearmIdleMonitor() {
+    root.seenActiveEdge = false
+    idleMonitorGate = false
+    idleRearmTimer.restart()
+  }
+  // give an async config reload a beat before re-enabling, so the frozen
+  // timeout below reads the new value at re-enable time
+  Timer {
+    id: idleRearmTimer
+    interval: 150
+    running: false
+    repeat: false
+    onTriggered: root.idleMonitorGate = root.idleMonitorWanted
+  }
+
+  IdleMonitor {
+    id: idleMonitor
+    enabled: root.idleMonitorGate
+    timeout: root.idleSeconds // only mutated while disabled — see above
+    respectInhibitors: true // apps' zwp_idle_inhibitor_v1 suppresses us too
+    onIsIdleChanged: {
+      console.log("overlay-screensaver: idle=" + idleMonitor.isIdle
+        + " armed=" + root.seenActiveEdge + " auto=" + root.autoEnabled)
+      if (!idleMonitor.isIdle) {
+        root.seenActiveEdge = true // observed activity; we may auto-show next idle
+        return
       }
+      if (!root.seenActiveEdge) return // armed on first activity edge, never at load
+      if (!root.overlayVisible)
+        root.showShader(root.configuredShader, "idle")
     }
   }
 
@@ -293,10 +326,16 @@ Item {
       autoShow: root.autoShow,
       idleSeconds: root.idleSeconds,
       autoEnabled: root.autoEnabled,
-      idle: idleLoader.item ? idleLoader.item.isIdle : false,
+      idle: idleMonitor.isIdle,
       off: root.offFile,
       held: root.holdFile,
-      stayAwake: root.stayAwake
+      stayAwake: root.stayAwake,
+      // diagnostics for the idle path (see docs/troubleshooting.md)
+      monitor: idleMonitor.enabled,
+      settled: root.idleConfigSettled,
+      stayAwakeLoaded: root.stayAwakeLoaded,
+      configSeen: root.ownConfigExists,
+      configLoaded: root.configAdapterLoaded
     })
   }
 
@@ -439,6 +478,7 @@ Item {
     onLoadFailed: function (error) {
       console.log("overlay-screensaver: own config load failed: " + error)
     }
+    onLoaded: root.configAdapterLoaded = true
     adapter: JsonAdapter {
       property bool autoShow: false
       property int idleSeconds: 300

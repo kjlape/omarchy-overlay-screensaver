@@ -133,12 +133,34 @@ property silently stops following the C++ impl. Protocol events still arrive
 (see `journalctl`/`quickshell log -r "*.debug=true"` → `has been marked
 idle/resumed`), so nothing looks wrong.
 
-Fix (what Service.qml does): **never let the monitor's timeout change during
-its lifetime.** The `IdleMonitor` lives in a `Loader` that only becomes
-active after the config file and off/hold/stay-awake probes have settled, so
-it is born with its final `timeout`. Later `enabled` flips are safe (verified:
-an enable flip replays current idle state immediately, which the
-`seenActiveEdge` arming guard absorbs).
+Fix (what Service.qml does): **declare the monitor statically and toggle it
+via `enabled` only.** A monitor instantiated mid-session (Loader `active`
+flip) has a dead `isIdle` even when it exists and is enabled — verified in
+the live shell by adding a statically-created monitor next to the Loader one:
+the static one fired, the Loader one never did. Enable/disable flips are safe
+(they replay current idle state, which the `seenActiveEdge` arming guard
+absorbs) — but the `timeout` binding may only change while the monitor is
+disabled; config edits go through a disable → reload → re-arm dance
+(`rearmIdleMonitor`) so the impl is reborn with the correct timeout.
+Never arm before the config's `idleSeconds` is actually parsed: gate on the
+FileView `loaded` SIGNAL — the `loaded` PROPERTY is `isLoadedOrAsync` and is
+already true during the async load, which would re-introduce a
+born-on-default-then-flip race.
+
+## Gotcha: FileView on an absent file never notices it appear
+
+Symptom: a `FileView` whose `path` points at a file that did not exist when
+the shell started (e.g. the user's config file, created afterwards) never
+loads it — `watchChanges: true` does not help, and editor saves that replace
+the file (`sed -i`, most editors) silently break the per-file watch too.
+
+Fix (what Service.qml does): watch the parent **directory** with a second
+`FileView`, probe for existence on every dir event (`[[ -f ]]` bash probe,
+upstream's own pattern), point the real `FileView` at the file only once it
+exists, and on every dir event `reload()` it and give it ~150 ms before
+dependent consumers rebuild. In Service.qml that reload also feeds
+`recreateIdleMonitor()` so an `idleSeconds` edit rebuilds the IdleMonitor
+instead of triggering the timeout-recreation bug above.
 
 ## Tripping hazards inherited from the shell
 
