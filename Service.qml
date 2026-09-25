@@ -68,12 +68,15 @@ Item {
     return s !== "" ? s : home + "/.local/state"
   })()
   readonly property string ownStateDir: stateHome + "/overlay-screensaver"
+  readonly property string configPath: configHome + "/overlay-screensaver/config.json"
   readonly property string stayAwakeDir: home + "/.local/state/omarchy/indicators"
 
   readonly property bool  autoShow: cfg("autoShow", false)
   readonly property int   idleSeconds: Math.max(0, Number(cfg("idleSeconds", 300)))
   readonly property bool  respectStayAwake: cfg("respectOmarchyStayAwake", true)
   property bool togglesLoaded: false     // off/hold flags read at least once
+  property bool configProbeRan: false    // own-config existence known
+  property bool ownConfigExists: false
   property bool offFile: false           // our "never auto-show again" flag
   property bool holdFile: false          // our temporary stay-awake
   property bool stayAwakeLoaded: false   // Omarchy's indicator, read-only
@@ -96,10 +99,22 @@ Item {
   // property silently dies). Creating it once config is settled keeps the
   // timeout constant for the monitor's lifetime; later autoEnabled toggles
   // are plain enable/disable flips, which replay current idle state safely
-  // (the seenActiveEdge guard absorbs a replayed idle=true).
+  // (the seenActiveEdge guard absorbs a replayed idle=true). If the config
+  // file appears or changes later (idleSeconds edit), recreateIdleMonitor()
+  // tears the monitor down and rebuilds it fresh, re-arming the guard so an
+  // edit made from ssh on an idle seat can't show.
+  function recreateIdleMonitor() {
+    root.seenActiveEdge = false
+    idleLoader.active = false
+    Qt.callLater(function () { idleLoader.active = root.idleConfigSettled })
+  }
+
+  readonly property bool idleConfigSettled: togglesLoaded && configProbeRan
+    && (stayAwakeLoaded || !respectStayAwake)
+
   Loader {
     id: idleLoader
-    active: root.togglesLoaded && (root.stayAwakeLoaded || !root.respectStayAwake)
+    active: root.idleConfigSettled
     sourceComponent: IdleMonitor {
       id: idleMonitor
       enabled: root.autoEnabled
@@ -372,12 +387,58 @@ Item {
   }
 
   // Own config file: $XDG_CONFIG_HOME/overlay-screensaver/config.json, lower
-  // precedence than the injected plugins[] entry (cfg() above).
+  // precedence than the injected plugins[] entry (cfg() above). The file may
+  // not exist yet (config created after the shell started) — a FileView on an
+  // absent file never notices it appear even with watchChanges (verified), so
+  // we watch the parent DIRECTORY via a probe and only point configFile at
+  // the file once it exists. Any change afterwards recreates the idle monitor
+  // (its timeout must never change in place — see troubleshooting.md).
   FileView {
-    id: configFile
-    path: root.configHome + "/overlay-screensaver/config.json"
+    id: configDirWatcher
+    path: root.configHome + "/overlay-screensaver"
     watchChanges: true
     printErrors: false
+    onFileChanged: if (!configProbe.running) configProbe.running = true
+  }
+
+  // editors often replace the file (new inode), which kills the per-file
+  // watch — give the reload a beat, then rebuild the idle monitor so its
+  // timeout is born correct (a timeout change in place silently kills it).
+  Timer {
+    id: configRecreateTimer
+    interval: 150
+    running: false
+    repeat: false
+    onTriggered: root.recreateIdleMonitor()
+  }
+
+  Process {
+    id: configProbe
+    command: ["bash", "-c",
+      "[[ -f \"$1\" ]] && echo yes || echo no", "--", root.configPath]
+    stdout: SplitParser {
+      onRead: function (line) {
+        var exists = String(line).trim() === "yes"
+        if (root.configProbeRan && exists) {
+          configFile.reload()
+          configRecreateTimer.restart()
+        } else if (root.configProbeRan && root.ownConfigExists !== exists) {
+          root.recreateIdleMonitor()
+        }
+        root.ownConfigExists = exists
+        root.configProbeRan = true
+      }
+    }
+  }
+
+  FileView {
+    id: configFile
+    path: root.ownConfigExists ? root.configPath : ""
+    watchChanges: true
+    printErrors: false
+    onLoadFailed: function (error) {
+      console.log("overlay-screensaver: own config load failed: " + error)
+    }
     adapter: JsonAdapter {
       property bool autoShow: false
       property int idleSeconds: 300
@@ -492,5 +553,6 @@ Item {
     refreshImage()
     ownStateProbe.running = true
     stayAwakeProbe.running = true
+    configProbe.running = true
   }
 }
