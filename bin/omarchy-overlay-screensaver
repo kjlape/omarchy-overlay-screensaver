@@ -45,6 +45,8 @@ gate auto-activation ONLY — manual show/shader always work):
   config   Install the example config to
            ~/.config/overlay-screensaver/config.json (never overwrites;
            `config --force` re-copies the example)
+  edit     Open the config in $EDITOR (installs the example first if absent;
+           clears the off flag if you set "autoShow": true while editing)
 
 Options:
   --source TAG  Label for the plugin's log line (default: caller info)
@@ -108,10 +110,30 @@ install_config() {
   exit 0
 }
 
+edit_config() {
+  local dst="${XDG_CONFIG_HOME:-$HOME/.config}/overlay-screensaver/config.json"
+  if [[ ! -f $dst ]]; then
+    echo "omarchy-overlay-screensaver: no config yet — installing the example first." >&2
+    install_config   # exits after installing
+  fi
+  local editor=${EDITOR:-${VISUAL:-vi}}
+  echo "editing $dst with $editor"
+  "$editor" "$dst"
+  # convenience: if the user flipped autoShow on, clear the off flag for them
+  if command -v jq >/dev/null 2>&1 \
+     && [[ $(jq -r .autoShow "$dst" 2>/dev/null) == true ]]; then
+    rm -f "$STATE_DIR/off"
+    echo "autoShow is on — off flag cleared (omarchy-overlay-screensaver enable)"
+  fi
+  echo "Live values: omarchy-overlay-screensaver state"
+  exit 0
+}
+
 # Local flag-file verbs: no IPC, no shell needed. (Only the first argument
 # can be one of these; anything else falls through to the IPC handling.)
 case ${1:-} in
   config) shift; install_config "${1:-}" ;;
+  edit)   edit_config ;;
   enable|disable|hold|unhold|state)
     CMD=$1
     case $CMD in
