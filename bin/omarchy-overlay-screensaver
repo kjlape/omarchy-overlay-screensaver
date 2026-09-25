@@ -42,6 +42,9 @@ gate auto-activation ONLY — manual show/shader always work):
   hold     Temporary stay-awake — suppress auto-show until `unhold`
   unhold   Clear the temporary hold
   state    Print the flag-file state (off/hold) and the auto-show gates
+  config   Install the example config to
+           ~/.config/overlay-screensaver/config.json (never overwrites;
+           `config --force` re-copies the example)
 
 Options:
   --source TAG  Label for the plugin's log line (default: caller info)
@@ -66,9 +69,49 @@ SHADER_NAME=""
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/overlay-screensaver"
 
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/overlay-screensaver"
+
+# Locate the example config that ships with this CLI. install.sh puts it in
+# ~/.local/share/overlay-screensaver/; the repo layout (dev checkout, plugin
+# clone) is the fallback.
+find_example_config() {
+  local selfdir candidates=(
+    "${XDG_DATA_HOME:-$HOME/.local/share}/overlay-screensaver/config.example.json"
+  )
+  selfdir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+  candidates+=("$selfdir/../config/overlay-screensaver.example.json")
+  # plugin clone location (repo symlinked or cloned into the plugin dir)
+  local plugdir="$HOME/.config/omarchy/plugins/kjlape.overlay-screensaver"
+  [[ -d $plugdir ]] && candidates+=("$plugdir/config/overlay-screensaver.example.json")
+  local c
+  for c in "${candidates[@]}"; do [[ -f $c ]] && { echo "$c"; return 0; }; done
+  return 1
+}
+
+install_config() {
+  local dst="${XDG_CONFIG_HOME:-$HOME/.config}/overlay-screensaver/config.json"
+  mkdir -p "$(dirname -- "$dst")"
+  if [[ -f $dst && $1 != --force ]]; then
+    echo "omarchy-overlay-screensaver: $dst already exists — not overwriting." >&2
+    echo "  (use 'omarchy-overlay-screensaver config --force' to overwrite)" >&2
+    exit 1
+  fi
+  local src
+  src=$(find_example_config) || {
+    echo "omarchy-overlay-screensaver: example config not found (re-run install.sh" >&2
+    echo "  or clone the plugin repo)." >&2
+    exit 1
+  }
+  cp -- "$src" "$dst"
+  echo "installed $dst (from $src)"
+  echo "Next: edit it (set \"autoShow\": true to opt in), then: omarchy-overlay-screensaver enable"
+  exit 0
+}
+
 # Local flag-file verbs: no IPC, no shell needed. (Only the first argument
 # can be one of these; anything else falls through to the IPC handling.)
 case ${1:-} in
+  config) shift; install_config "${1:-}" ;;
   enable|disable|hold|unhold|state)
     CMD=$1
     case $CMD in
@@ -81,8 +124,9 @@ case ${1:-} in
             echo "  against our overlay). Run: omarchy toggle screensaver" >&2
           fi
           if [[ $(omarchy-overlay-screensaver status 2>/dev/null | jq -r .autoShow 2>/dev/null) != true ]]; then
-            echo "NOTE: auto-show is still off — set \"autoShow\": true in" >&2
-            echo "  ~/.config/overlay-screensaver/config.json (see config/overlay-screensaver.example.json)." >&2
+            echo "NOTE: auto-show is still off — install and edit the config first:" >&2
+            echo "  omarchy-overlay-screensaver config" >&2
+            echo "  then set \"autoShow\": true in ~/.config/overlay-screensaver/config.json" >&2
           fi
           echo "auto-show enabled (off flag removed)" ;;
         disable) mkdir -p "$STATE_DIR"; touch "$STATE_DIR/off"; echo "auto-show disabled" ;;

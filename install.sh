@@ -40,9 +40,12 @@ fail() { echo "install: $1" >&2; exit 1; }
 
 (( EUID != 0 )) || fail "run this as your desktop user, not root"
 
-mkdir -p "$HOME/.local/bin"
+mkdir -p "$HOME/.local/bin" "$HOME/.local/share/overlay-screensaver"
 install -m 755 "$REPO_DIR/bin/omarchy-overlay-screensaver" "$HOME/.local/bin/omarchy-overlay-screensaver"
+install -m 644 "$REPO_DIR/config/overlay-screensaver.example.json" \
+  "$HOME/.local/share/overlay-screensaver/config.example.json"
 echo "installed $HOME/.local/bin/omarchy-overlay-screensaver"
+echo "installed $HOME/.local/share/overlay-screensaver/config.example.json"
 
 if (( ${SYSTEM:-0} )); then
   sudo install -m 755 "$REPO_DIR/bin/omarchy-overlay-screensaver" /usr/local/bin/omarchy-overlay-screensaver
