@@ -156,14 +156,17 @@ Item {
     respectInhibitors: true // apps' zwp_idle_inhibitor_v1 suppresses us too
     onIsIdleChanged: {
       console.log("overlay-screensaver: idle=" + idleMonitor.isIdle
-        + " armed=" + root.seenActiveEdge + " auto=" + root.autoEnabled)
+        + " armed=" + root.seenActiveEdge + " auto=" + root.autoEnabled + " mode=" + root.configuredAutoMode)
       if (!idleMonitor.isIdle) {
         root.seenActiveEdge = true // observed activity; we may auto-show next idle
         return
       }
       if (!root.seenActiveEdge) return // armed on first activity edge, never at load
       if (!root.overlayVisible)
-        root.showShader(root.configuredShader, "idle")
+        if (root.configuredAutoMode === "image")
+          root.show("idle")
+        else
+          root.showShader(root.configuredShader, "idle")
     }
   }
 
@@ -195,6 +198,7 @@ Item {
   })
   readonly property int fpsCap: Math.max(1, Number(cfg("fps", 30)))
   readonly property string configuredShader: String(cfg("shader", "starnest")).trim()
+  readonly property string configuredAutoMode: String(cfg("autoMode", "shader")).trim()
 
   // Active shader's baked stages, as URLs for the ShaderEffect. While no
   // shader is active (image mode, before the first `showShader`) they fall
@@ -324,6 +328,7 @@ Item {
       screens: Quickshell.screens.length,
       // autonomous idle mode state
       autoShow: root.autoShow,
+      autoMode: root.configuredAutoMode,
       idleSeconds: root.idleSeconds,
       autoEnabled: root.autoEnabled,
       idle: idleMonitor.isIdle,
@@ -486,6 +491,7 @@ Item {
       property bool respectOmarchyStayAwake: true
       property string shader: ""
       property string image: ""
+      property string autoMode: "shader"
     }
   }
 

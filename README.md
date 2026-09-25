@@ -67,7 +67,7 @@ the auto-lock (the stock one self-kills against our overlay).
 ```bash
 omarchy toggle screensaver                       # 1. stock screensaver off
 omarchy-overlay-screensaver config               # installs the example config
-$EDITOR ~/.config/overlay-screensaver/config.json   # set "autoShow": true
+omarchy-overlay-screensaver edit                 # $EDITOR; set "autoShow": true
 omarchy-overlay-screensaver enable               # clears the off flag
 omarchy-overlay-screensaver state                # off/hold gates + status
 ```
