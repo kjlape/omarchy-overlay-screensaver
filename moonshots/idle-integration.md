@@ -1,5 +1,16 @@
 # Moonshot: trigger the overlay on idle (become Omarchy's screensaver)
 
+> **Superseded on one point (2026-09-25):** hazards H1/H2 below — the overlay
+> surviving or interfering with the lock — turned out to be protocol-impossible.
+> `ext-session-lock-v1` requires the compositor to stop rendering *and* stop
+> delivering input to normal client surfaces while locked, so our layer surface
+> is invisible and inert under the lock screen (verified by hand: overlay up,
+> session locked over ssh, lock prompt behaved normally). Lock detection is
+> therefore not needed by any design. See
+> [standalone-idle-mode.md](standalone-idle-mode.md) fact 3. Everything else
+> here — the idle-service inventory, the toggle chain, Option A's analysis —
+> still holds.
+
 > Goal: make the overlay the thing that happens when this machine goes idle —
 > at `idle.screensaver` seconds, ahead of the lock — while keeping every core
 > guarantee intact: starts hidden, no persisted visibility, `kill` always
