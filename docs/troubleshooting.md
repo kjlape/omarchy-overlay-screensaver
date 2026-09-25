@@ -119,6 +119,27 @@ omarchy restart shell
 The overlay starts hidden with no persisted state, so a shell restart can
 never leave the screen covered.
 
+## Gotcha: IdleMonitor `isIdle` dies after a `timeout` change (Quickshell 0.3.1)
+
+Symptom: `IdleMonitor` exists, `enabled` is true, the C++ side even logs
+`IdleNotification ... has been marked idle` / `resumed` in the journal — but
+the QML `isIdle` property never changes and `onIsIdleChanged` never fires.
+Status reads `idle:false` forever.
+
+Cause: the monitor is created with the default timeout (or an earlier one)
+and the `timeout` binding then changes; quickshell destroys and recreates the
+underlying `ext-idle-notify` object, and after that recreation the QML-side
+property silently stops following the C++ impl. Protocol events still arrive
+(see `journalctl`/`quickshell log -r "*.debug=true"` → `has been marked
+idle/resumed`), so nothing looks wrong.
+
+Fix (what Service.qml does): **never let the monitor's timeout change during
+its lifetime.** The `IdleMonitor` lives in a `Loader` that only becomes
+active after the config file and off/hold/stay-awake probes have settled, so
+it is born with its final `timeout`. Later `enabled` flips are safe (verified:
+an enable flip replays current idle state immediately, which the
+`seenActiveEdge` arming guard absorbs).
+
 ## Tripping hazards inherited from the shell
 
 - `omarchy-shell` IPC can exit 0 on failure — parse the result string

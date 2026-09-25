@@ -19,7 +19,20 @@
 > stay-awake awareness and pointer hiding, which turned out cheap enough to be
 > **requirements** (§2b, §4b), not losses.
 >
-> Not implemented. Researched 2026-09-25 against this machine (Omarchy 4.0.4,
+> **Implemented 2026-09-25 (Variant P).** §1–§4b are live: `IdleMonitor`
+> auto-show (opt-in, `autoShow` + `enable`), off/hold flag files, stay-awake
+> awareness (read-only), own-config `FileView`+`JsonAdapter`, `Qt.BlankCursor`,
+> Qt motion dismissal replacing the `hyprctl cursorpos` poll. Verified live:
+> auto-show fires on a real activity→idle edge, replayed idle at arm is
+> ignored, `qs ipc` status carries the gates. §5 Variant S (systemd unit,
+> own process) remains unbuilt. One hard-won gotcha not visible in the design:
+> quickshell 0.3.1 recreates the underlying idle-notification object when
+> `timeout` changes, and the QML `isIdle` property silently stops updating
+> after that — the monitor is now created in a `Loader` only after config and
+> flag files settle, so its timeout never changes (see
+> docs/troubleshooting.md).
+>
+> Originally researched 2026-09-25 against this machine (Omarchy 4.0.4,
 > Hyprland 0.56.2, Quickshell 0.3.1). Empirical results are marked **[verified]**.
 
 ## Verified mechanics this design rides on

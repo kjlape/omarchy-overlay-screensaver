@@ -14,6 +14,11 @@ The "run all 270 hacks" moonshot via Xvfb is tracked separately under `moonshots
 - [~] Phase 1: xscreensaver `glx/glsl/` collection (32 programs, 38 files — verified against local 6.16 tree). In progress: 9/32 ported (`starnest`, `universeball`, `topologica`, `synthwavecity`, `downfall`, `trizm`, `hexplasma`, `stardome`, `rigrekt`). The `universeball` port also landed the multi-shader API — `showShader(name, source)`, `shader [NAME]` / `shaders` CLI verbs — so future ports need no Service.qml changes beyond a `knownShaders` entry.
 - [~] Phase 1b: hacks that are **not** GLSL sources, reimplemented as shaders from their C algorithms (see tip 19). In progress: 1 (`xmatrix`, digital rain, from `hacks/xmatrix.c`; feasibility study in [moonshots/matrix-hacks.md](../moonshots/matrix-hacks.md)). `glmatrix` (the 3D title-sequence variant) is the same class and is deliberately not scheduled — that report defers it.
 - [] Phase 2: curated shadertoy.com picks (30–50 programs)
+- [x] Phase 3a: **autonomous idle mode** (private `IdleMonitor`, own off/hold
+  flag files, own config file, stay-awake awareness, `Qt.BlankCursor`,
+  motion-dismissal via Qt events replacing the `hyprctl` poll). Difficulty:
+  trivial mechanically, annoying empirically — see
+  [moonshots/standalone-idle-mode.md](../moonshots/standalone-idle-mode.md).
 - [ ] Phase 3: config + UX integration
 - [ ] Phase 4: tooling (batch conversion, shader gallery)
 

@@ -1,0 +1,9 @@
+{
+  "_readme": "Autonomous idle mode for kjlape.overlay-screensaver. Copy to ~/.config/overlay-screensaver/config.json. Precedence: shell.json plugins[] entry > this file > built-in defaults. PREREQUISITE for auto-show: turn the stock Omarchy screensaver OFF first (omarchy toggle screensaver) — two screensavers break the auto-lock. Then run: omarchy-overlay-screensaver enable",
+  "autoShow": false,
+  "idleSeconds": 300,
+  "fps": 30,
+  "shader": "starnest",
+  "image": "",
+  "respectOmarchyStayAwake": true
+}

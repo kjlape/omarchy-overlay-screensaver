@@ -23,8 +23,9 @@ Four ways to get your screen back, in order:
 
 1. **Escape** — the overlay grabs the keyboard exclusively while shown.
 2. **Click anywhere** on the overlay.
-3. **Move the mouse** — the cursor is polled via `hyprctl cursorpos` while the
-   overlay is shown, and any movement dismisses it.
+3. **Move the mouse** — dismissal is driven by Qt motion events on the overlay
+   surface itself; any ≥1 px move hides it (a 250 ms grace after show ignores
+   the synthetic map-time motion, so it never dismisses itself).
 4. **CLI from ssh or another TTY** (no display access needed):
 
    ```bash
@@ -44,6 +45,66 @@ Four ways to get your screen back, in order:
 
 There is no daemon and no persisted state. `kill` is not graceful — it is the
 break-glass option.
+
+While the overlay is shown the pointer is hidden (`Qt.BlankCursor`, a
+per-surface null cursor — it comes back the moment the surface unmaps, even
+on a crash) and the shader runs at the configured `fps` cap (default 30) to
+limit idle battery drain.
+
+## Autonomous idle mode (opt-in)
+
+The overlay can also become an idle-activated screensaver that runs entirely
+on its own clock — a private `IdleMonitor` (`ext-idle-notify-v1`), its own
+toggle files, its own config. It deliberately **does not touch** the stock
+Omarchy screensaver machinery: it creates no idle inhibitor, never touches
+DPMS/suspend/lock schedules, and never writes Omarchy's stay-awake indicator
+(it *reads* that indicator and goes quiet while Stay Awake is on).
+
+**Order matters:** turn the stock screensaver off FIRST
+(`omarchy toggle screensaver`), then opt in. Two screensavers at once break
+the auto-lock (the stock one self-kills against our overlay).
+
+```bash
+omarchy toggle screensaver                       # 1. stock screensaver off
+mkdir -p ~/.config/overlay-screensaver
+cp <repo>/config/overlay-screensaver.example.json \
+   ~/.config/overlay-screensaver/config.json
+$EDITOR ~/.config/overlay-screensaver/config.json   # set "autoShow": true
+omarchy-overlay-screensaver enable               # clears the off flag
+omarchy-overlay-screensaver state                # off/hold gates + status
+```
+
+How it behaves:
+
+- **`autoShow` defaults to false** — enabling the plugin never changes when
+  your screen gets covered. Idle auto-show happens only after you set
+  `"autoShow": true` and run `enable`.
+- The screen covers after `idleSeconds` (default 300) of genuine seat idle
+  with an observed activity→idle transition (a restart while unattended can
+  never cover the screen).
+- Keep `idleSeconds` **below** Omarchy's `idle.lock` (300 s default) — the
+  lock hides us by protocol anyway, so a longer idle timeout just never fires.
+- Manual `show`/`shader`/`hide` work regardless of these gates.
+- Dismiss as usual (Escape/click/motion); the overlay re-arms on the next
+  idle.
+
+Toggles:
+
+- `omarchy-overlay-screensaver disable` — never auto-show again (off flag);
+  `enable` undoes it.
+- `hold` / `unhold` — temporary stay-awake (presenting, watching).
+- Omarchy's Stay Awake (bar indicator, `omarchy toggle idle`) is respected
+  automatically and read-only.
+
+`respectInhibitors` is on: a playing video or any `zwp_idle_inhibitor_v1`
+holder suppresses auto-show. A session lock (hyprlock / omarchy lock) hides
+the overlay entirely and it comes back after unlock — dismissal by pointer
+still works. Do **not** use the menu's Screensaver button while this mode is
+on: it bypasses the stock toggle (`force`) and will collide (drop that menu
+entry in `~/.config/omarchy/omarchy-menu.jsonc` if you use it).
+
+Full design, verified mechanics and the checklist: see
+[moonshots/standalone-idle-mode.md](moonshots/standalone-idle-mode.md).
 
 ## Install
 

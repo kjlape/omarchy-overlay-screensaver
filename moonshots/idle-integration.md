@@ -1,5 +1,12 @@
 # Moonshot: trigger the overlay on idle (become Omarchy's screensaver)
 
+> **Status 2026-09-25: implemented, differently.** The standalone-variant
+> design in [standalone-idle-mode.md](standalone-idle-mode.md) is now built
+> (Variant P) — read that file first for the current idle behaviour; this
+> doc's H1/H2 hazard analysis is superseded by its fact 3. The integration
+> ladder below remains the reference if the takeover-style integration is
+> ever wanted.
+
 > **Superseded on one point (2026-09-25):** hazards H1/H2 below — the overlay
 > surviving or interfering with the lock — turned out to be protocol-impossible.
 > `ext-session-lock-v1` requires the compositor to stop rendering *and* stop

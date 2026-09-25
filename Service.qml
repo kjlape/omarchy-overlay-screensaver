@@ -11,9 +11,9 @@ import Quickshell.Wayland
 // Dismissal (in order of preference):
 //   1. Any keystroke — the overlay grabs the keyboard exclusively while shown
 //   2. Any click   — MouseArea below
-//   3. Mouse move  — cursor position polled via `hyprctl cursorpos` while shown
-//   4. IPC: `omarchy-shell overlayscreensaver hide` (works from ssh/TTY,
-//      see bin/omarchy-overlay-screensaver)
+//   3. Mouse move  — Qt-level motion events on the overlay surface itself
+//      (see moonshots/standalone-idle-mode.md §4; the old hyprctl poll is gone)
+//   4. IPC: `omarchy-overlay-screensaver hide` (works from ssh/TTY)
 //   5. Nuke option: `omarchy-shell overlayscreensaver kill` or
 //      `omarchy restart shell` — the overlay starts hidden, so a shell
 //      restart always recovers the screen. Nothing here runs outside the
@@ -22,10 +22,22 @@ import Quickshell.Wayland
 // Config (shell.json plugins[] entry):
 //   { "id": "kjlape.overlay-screensaver", "image": "/path/to/img.png",
 //     "shader": "starnest" }
+// A standalone config file takes LOWER precedence (injected plugins[] entry
+// wins): $XDG_CONFIG_HOME/overlay-screensaver/config.json — see
+// moonshots/standalone-idle-mode.md §3. Keys: autoShow, idleSeconds, shader,
+// image, fps, respectOmarchyStayAwake.
 // With no `image`, falls back to the current omarchy background.
 // `shader` selects the DEFAULT ported xscreensaver GLSL hack (see shaders/)
 // used by `showShader`/the `shader` CLI verb when no name is passed; an
 // explicit name argument always wins (`shader universeball`).
+//
+// Autonomous idle mode (opt-in, default OFF): with autoShow enabled and the
+// stock omarchy screensaver turned off (`omarchy toggle screensaver`), the
+// overlay shows itself after idleSeconds of seat idle via a private
+// IdleMonitor (ext-idle-notify-v1). It creates no idle inhibitor, never
+// touches DPMS/suspend, never writes the Omarchy stay-awake file (read-only
+// consumer) and needs no lock detection — a session lock hides us by protocol
+// (moonshots/standalone-idle-mode.md facts 3–5).
 
 Item {
   id: root
@@ -42,6 +54,70 @@ Item {
 
   property bool overlayVisible: false
   property string imagePath: ""
+
+  // ---- autonomous idle mode (moonshots/standalone-idle-mode.md) ----
+  // Opt-in auto-activation: everything defaults OFF. The IdleMonitor, the
+  // flag files and the stay-awake awareness only ever gate auto-show; manual
+  // show/shader IPC works regardless.
+  readonly property string configHome: (function () {
+    var c = Quickshell.env("XDG_CONFIG_HOME")
+    return c !== "" ? c : home + "/.config"
+  })()
+  readonly property string stateHome: (function () {
+    var s = Quickshell.env("XDG_STATE_HOME")
+    return s !== "" ? s : home + "/.local/state"
+  })()
+  readonly property string ownStateDir: stateHome + "/overlay-screensaver"
+  readonly property string stayAwakeDir: home + "/.local/state/omarchy/indicators"
+
+  readonly property bool  autoShow: cfg("autoShow", false)
+  readonly property int   idleSeconds: Math.max(0, Number(cfg("idleSeconds", 300)))
+  readonly property bool  respectStayAwake: cfg("respectOmarchyStayAwake", true)
+  property bool togglesLoaded: false     // off/hold flags read at least once
+  property bool offFile: false           // our "never auto-show again" flag
+  property bool holdFile: false          // our temporary stay-awake
+  property bool stayAwakeLoaded: false   // Omarchy's indicator, read-only
+  property bool stayAwake: false
+  property bool seenActiveEdge: false    // arming guard — see IdleMonitor below
+
+  // auto-show is opt-in, gated by both flag files and by Omarchy's Stay Awake
+  // indicator (awareness, not inhibition — see §2b).
+  readonly property bool autoEnabled: autoShow && idleSeconds > 0 && !offFile
+    && !holdFile && !(respectStayAwake && stayAwakeLoaded && stayAwake)
+  // If auto-activation turns off (disable/hold/Stay Awake), forget the arming
+  // guard so a later re-enable on an already-idle seat cannot show the overlay
+  // without a fresh observed activity→idle transition.
+  onAutoEnabledChanged: if (!autoEnabled) seenActiveEdge = false
+
+  // The IdleMonitor must not exist until config + flag files are loaded:
+  // quickshell recreates its underlying ext-idle-notify object when `timeout`
+  // changes, and after that recreation the isIdle property stops updating
+  // (observed on Quickshell 0.3.1 — events still arrive in C++, the QML
+  // property silently dies). Creating it once config is settled keeps the
+  // timeout constant for the monitor's lifetime; later autoEnabled toggles
+  // are plain enable/disable flips, which replay current idle state safely
+  // (the seenActiveEdge guard absorbs a replayed idle=true).
+  Loader {
+    id: idleLoader
+    active: root.togglesLoaded && (root.stayAwakeLoaded || !root.respectStayAwake)
+    sourceComponent: IdleMonitor {
+      id: idleMonitor
+      enabled: root.autoEnabled
+      timeout: root.idleSeconds
+      respectInhibitors: true // apps' zwp_idle_inhibitor_v1 suppresses us too
+      onIsIdleChanged: {
+        console.log("overlay-screensaver: idle=" + idleMonitor.isIdle
+          + " armed=" + root.seenActiveEdge + " auto=" + root.autoEnabled)
+        if (!idleMonitor.isIdle) {
+          root.seenActiveEdge = true // observed activity; we may auto-show next idle
+          return
+        }
+        if (!root.seenActiveEdge) return // armed on first activity edge, never at load
+        if (!root.overlayVisible)
+          root.showShader(root.configuredShader, "idle")
+      }
+    }
+  }
 
   // ---- shader hack content (see moonshots/xscreensaver-hacks.md) ----
   // "image" = static image / background (the MVP); "shader" = a ported
@@ -69,6 +145,7 @@ Item {
     "xmatrix": "shaders/xmatrix.frag.qsb",
     "xmatrixcrt": "shaders/xmatrixcrt.frag.qsb"
   })
+  readonly property int fpsCap: Math.max(1, Number(cfg("fps", 30)))
   readonly property string configuredShader: String(cfg("shader", "starnest")).trim()
 
   // Active shader's baked stages, as URLs for the ShaderEffect. While no
@@ -82,10 +159,11 @@ Item {
   readonly property url activeVertUrl: Qt.resolvedUrl(
     root.activeFragUrl.toString().replace(/\.frag\.qsb$/, ".vert.qsb"))
 
-  // Mouse-move dismissal: while the overlay is shown, poll `hyprctl cursorpos`
-  // and hide as soon as the cursor moves from its position at show time.
-  // The empty string marks "baseline not yet sampled".
-  property string cursorBaseline: ""
+  // Motion-move dismissal state: while shown, the first pointer event after a
+  // 250 ms grace sets the baseline; any later ≥1 px move with no button held
+  // hides. (Replaced the 300 ms `hyprctl cursorpos` poll — see §4.)
+  property point motionBaseline: Qt.point(-1, -1)
+  readonly property int motionHideDelayMs: 250
 
   // ---- config from shell.json ----
   readonly property var pluginConfig: {
@@ -100,7 +178,11 @@ Item {
 
   function cfg(name, fallback) {
     var v = pluginConfig ? pluginConfig[name] : undefined
-    return (v === undefined || v === null) ? fallback : v
+    if (v === undefined || v === null) {
+      var a = configFile.adapter
+      if (a) v = a[name]
+    }
+    return (v === undefined || v === null || v === "") ? fallback : v
   }
 
   // Config image wins; otherwise resolve the current background once on load.
@@ -130,7 +212,7 @@ Item {
   function show(source): string {
     root.contentMode = "image"
     refreshImage()
-    root.cursorBaseline = "" // resample cursor position on each show
+    armMotionDismissal()
     root.overlayVisible = true
     console.log("overlay-screensaver: shown source=" + String(source || "unknown")
       + " image=" + (root.imagePath || "(none)"))
@@ -148,11 +230,19 @@ Item {
     root.shaderName = name
     root.contentMode = "shader"
     root.shaderTime = 0 // restart animation on each show
-    root.cursorBaseline = "" // resample cursor position on each show
+    armMotionDismissal()
     root.overlayVisible = true
     console.log("overlay-screensaver: shown source=" + String(source || "unknown")
       + " shader=" + root.shaderName)
     return "ok"
+  }
+
+  // Reset the motion-dismissal guard for a fresh show: ignore everything for
+  // motionHideDelayMs (map-time synthetic motion lands in that window), then
+  // sample the baseline from the first real event, then require a ≥1 px move.
+  function armMotionDismissal() {
+    root.motionBaseline = Qt.point(-1, -1)
+    motionGraceTimer.restart()
   }
 
   function hide(source): string {
@@ -183,18 +273,27 @@ Item {
       shader: root.shaderName,
       shaders: Object.keys(root.knownShaders),
       image: root.imagePath,
-      screens: Quickshell.screens.length
+      screens: Quickshell.screens.length,
+      // autonomous idle mode state
+      autoShow: root.autoShow,
+      idleSeconds: root.idleSeconds,
+      autoEnabled: root.autoEnabled,
+      idle: idleLoader.item ? idleLoader.item.isIdle : false,
+      off: root.offFile,
+      held: root.holdFile,
+      stayAwake: root.stayAwake
     })
   }
 
-  // Drive the shader hack at ~60 fps while it is shown. A dedicated clock
-  // (not a binding on Date.now()) so the animation restarts cleanly per show.
+  // Drive the shader hack at the configured fps cap while shown. A dedicated
+  // clock (not a binding on Date.now()) so the animation restarts cleanly per
+  // show; the delta comes from the interval so capping fps stays correct.
   Timer {
     id: shaderTimer
-    interval: 16
+    interval: Math.max(16, Math.round(1000 / root.fpsCap))
     running: root.overlayVisible && root.contentMode === "shader"
     repeat: true
-    onTriggered: root.shaderTime += 0.016
+    onTriggered: root.shaderTime += interval / 1000
   }
 
   Process {
@@ -208,41 +307,84 @@ Item {
     }
   }
 
+  // Grace window after each show: map delivers synthetic motion/enter under a
+  // stationary cursor, which must not self-dismiss the overlay.
   Timer {
-    id: cursorTimer
-    interval: 300
-    running: root.overlayVisible
-    repeat: true
-    onTriggered: if (!cursorProc.running) cursorProc.running = true
+    id: motionGraceTimer
+    interval: root.motionHideDelayMs
+    running: false
+    repeat: false
+  }
+
+  // ---- autonomous idle mode: flag files + stay-awake awareness ----
+  // Our own toggles: off/hold under $XDG_STATE_HOME/overlay-screensaver/
+  // (created/removed by the CLI). Omarchy's stay-awake indicator is READ-ONLY
+  // — never create, delete, or write it (moonshots/standalone-idle-mode.md §2b,
+  // "never write the stay-awake indicator file" invariant).
+  Process {
+    id: ownStateProbe
+    command: ["bash", "-c",
+      "d=\"$1\"; mkdir -p \"$d\"; o=no; h=no; " +
+      "[ -f \"$d/off\" ] && o=yes; [ -f \"$d/hold\" ] && h=yes; echo \"$o $h\"",
+      "--", root.ownStateDir]
+    stdout: SplitParser {
+      onRead: function (line) {
+        var parts = String(line).trim().split(/\s+/)
+        root.offFile = parts[0] === "yes"
+        root.holdFile = parts[1] === "yes"
+        root.togglesLoaded = true
+      }
+    }
+    onExited: ownStateDirWatcher.reload()
+  }
+
+  FileView {
+    id: ownStateDirWatcher
+    path: root.ownStateDir
+    watchChanges: true
+    printErrors: false
+    onFileChanged: if (!ownStateProbe.running) ownStateProbe.running = true
   }
 
   Process {
-    id: cursorProc
-    // The shell process runs without HYPRLAND_INSTANCE_SIGNATURE (uwsm strips
-    // it), so plain `hyprctl` fails here. Derive the signature from
-    // XDG_RUNTIME_DIR/hypr/ at call time (newest instance wins).
+    id: stayAwakeProbe
+    // Read-only: we do NOT mkdir Omarchy's indicator dir (its own service
+    // creates it); printErrors:false tolerates it being absent.
     command: ["bash", "-c",
-      "d=\"$XDG_RUNTIME_DIR/hypr\"; " +
-      "sig=$(ls -t \"$d\" 2>/dev/null | head -n1); " +
-      "if [ -z \"$sig\" ]; then echo \"no hypr instance\" >&2; exit 1; fi; " +
-      "HYPRLAND_INSTANCE_SIGNATURE=\"$sig\" hyprctl cursorpos"]
-    stderr: StdioCollector {
-      onStreamFinished: if (String(text).trim() !== "")
-        console.log("overlay-screensaver: cursorpos stderr: " + String(text).trim())
-    }
-    stdout: StdioCollector {
-      onStreamFinished: {
-        var pos = String(text || "").trim()
-        if (pos === "") return
-        if (root.cursorBaseline === "") {
-          root.cursorBaseline = pos
-          return
-        }
-        if (pos !== root.cursorBaseline) {
-          console.log("overlay-screensaver: hidden source=mouse-move")
-          root.overlayVisible = false
-        }
+      "[[ -f \"$1/stay-awake\" ]] && echo yes || echo no", "--", root.stayAwakeDir]
+    stdout: SplitParser {
+      onRead: function (line) {
+        root.stayAwake = String(line).trim() === "yes"
+        root.stayAwakeLoaded = true
       }
+    }
+    onExited: stayAwakeDirWatcher.reload()
+  }
+
+  FileView {
+    id: stayAwakeDirWatcher
+    // Watch the parent directory (upstream's own pattern): a FileView on the
+    // file itself would error while absent.
+    path: root.stayAwakeDir
+    watchChanges: true
+    printErrors: false
+    onFileChanged: if (!stayAwakeProbe.running) stayAwakeProbe.running = true
+  }
+
+  // Own config file: $XDG_CONFIG_HOME/overlay-screensaver/config.json, lower
+  // precedence than the injected plugins[] entry (cfg() above).
+  FileView {
+    id: configFile
+    path: root.configHome + "/overlay-screensaver/config.json"
+    watchChanges: true
+    printErrors: false
+    adapter: JsonAdapter {
+      property bool autoShow: false
+      property int idleSeconds: 300
+      property int fps: 30
+      property bool respectOmarchyStayAwake: true
+      property string shader: ""
+      property string image: ""
     }
   }
 
@@ -314,7 +456,23 @@ Item {
 
       MouseArea {
         anchors.fill: parent
+        hoverEnabled: true
+        acceptedButtons: Qt.AllButtons
+        // §4b: blank the cursor while shown; unmap restores it by itself —
+        // leak-proof by construction (never use `cursor:invisible`).
+        cursorShape: root.overlayVisible ? Qt.BlankCursor : Qt.ArrowCursor
         onClicked: root.hide("click")
+        onPositionChanged: function (mouse) {
+          if (!root.overlayVisible || mouse.buttons !== Qt.NoButton) return
+          if (motionGraceTimer.running) return // map-time synthetic motion
+          if (root.motionBaseline.x < 0) {
+            root.motionBaseline = Qt.point(mouse.x, mouse.y)
+            return
+          }
+          if (Math.abs(mouse.x - root.motionBaseline.x) >= 1
+              || Math.abs(mouse.y - root.motionBaseline.y) >= 1)
+            root.hide("motion")
+        }
       }
 
       Item {
@@ -330,5 +488,9 @@ Item {
     }
   }
 
-  Component.onCompleted: refreshImage()
+  Component.onCompleted: {
+    refreshImage()
+    ownStateProbe.running = true
+    stayAwakeProbe.running = true
+  }
 }

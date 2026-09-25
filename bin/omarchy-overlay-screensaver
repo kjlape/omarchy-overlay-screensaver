@@ -20,7 +20,7 @@ usage() {
   cat <<'USAGE'
 Usage: omarchy-overlay-screensaver <command> [NAME] [--source TAG]
 
-Commands:
+Show/hide (via omarchy-shell IPC):
   show     Show the overlay (covers everything on every monitor)
   shader   Show the overlay with a GLSL hack instead of the image. NAME
            picks the hack (default: the shell.json `shader` entry, else
@@ -28,9 +28,20 @@ Commands:
   shaders  List the available GLSL hacks, one per line
   hide     Hide the overlay
   toggle   Flip it
-  status   Print {visible, mode, shader, shaders, image, screens} as JSON
+  status   Print {visible, mode, shader, shaders, image, screens, auto...} JSON
   kill     FAILSAFE: restart the omarchy shell. The overlay starts hidden,
            so this always recovers the screen — even if IPC itself is wedged.
+
+Autonomous idle mode (own flag files under ~/.local/state/overlay-screensaver/;
+gate auto-activation ONLY — manual show/shader always work):
+  enable   Allow auto-show on idle. Requires "autoShow": true in
+           ~/.config/overlay-screensaver/config.json. Warns if the stock
+           screensaver is still enabled (two screensavers break auto-lock —
+           run `omarchy toggle screensaver` first).
+  disable  Never auto-show (creates the `off` flag; remove to undo)
+  hold     Temporary stay-awake — suppress auto-show until `unhold`
+  unhold   Clear the temporary hold
+  state    Print the flag-file state (off/hold) and the auto-show gates
 
 Options:
   --source TAG  Label for the plugin's log line (default: caller info)
@@ -52,6 +63,40 @@ default_source() {
 
 SOURCE=$(default_source)
 SHADER_NAME=""
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/overlay-screensaver"
+
+# Local flag-file verbs: no IPC, no shell needed. (Only the first argument
+# can be one of these; anything else falls through to the IPC handling.)
+case ${1:-} in
+  enable|disable|hold|unhold|state)
+    CMD=$1
+    case $CMD in
+        enable)
+          mkdir -p "$STATE_DIR"
+          rm -f "$STATE_DIR/off"
+          if ! /usr/share/omarchy/bin/omarchy-toggle-enabled screensaver-off 2>/dev/null; then
+            echo "WARNING: the stock Omarchy screensaver is still enabled." >&2
+            echo "  Two screensavers break the auto-lock (the stock one self-kills" >&2
+            echo "  against our overlay). Run: omarchy toggle screensaver" >&2
+          fi
+          if [[ $(omarchy-overlay-screensaver status 2>/dev/null | jq -r .autoShow 2>/dev/null) != true ]]; then
+            echo "NOTE: auto-show is still off — set \"autoShow\": true in" >&2
+            echo "  ~/.config/overlay-screensaver/config.json (see config/overlay-screensaver.example.json)." >&2
+          fi
+          echo "auto-show enabled (off flag removed)" ;;
+        disable) mkdir -p "$STATE_DIR"; touch "$STATE_DIR/off"; echo "auto-show disabled" ;;
+        hold)    mkdir -p "$STATE_DIR"; touch "$STATE_DIR/hold"; echo "held (temporary stay-awake)" ;;
+        unhold)  rm -f "$STATE_DIR/hold"; echo "hold cleared" ;;
+        state)
+          o=no; h=no
+          [[ -f $STATE_DIR/off  ]] && o=yes
+          [[ -f $STATE_DIR/hold ]] && h=yes
+          echo "off=$o hold=$h state_dir=$STATE_DIR"
+          omarchy-overlay-screensaver status 2>/dev/null || true ;;
+    esac
+    exit 0 ;;
+esac
 
 while [[ $# -gt 0 ]]; do
   case $1 in
