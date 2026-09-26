@@ -101,6 +101,7 @@ Item {
   // If auto-activation turns off (disable/hold/Stay Awake), forget the arming
   // guard so a later re-enable on an already-idle seat cannot show the overlay
   // without a fresh observed activity→idle transition.
+  // (or a full fresh grace period — see idleGraceTimer).
   onAutoEnabledChanged: if (!autoEnabled) seenActiveEdge = false
 
   // The IdleMonitor must not exist until config + flag files are loaded:
@@ -112,7 +113,7 @@ Item {
   // idle=true). If the config file appears or changes later (idleSeconds
   // edit), rearmIdleMonitor() disables and re-enables the monitor so its
   // timeout is reborn correct, re-arming the guard so an edit made from ssh
-  // on an idle seat can't show.
+  // on an idle seat can't show without a full fresh grace period.
   function recreateIdleMonitor() { root.rearmIdleMonitor() }
 
   readonly property bool idleConfigSettled: togglesLoaded && configProbeRan
@@ -128,8 +129,8 @@ Item {
   // dead isIdle property even though it exists and is enabled (verified:
   // a statically-created monitor in the same process fires; the Loader one
   // never does — docs/troubleshooting.md). Enable/disable flips are safe
-  // (they replay current idle state; the seenActiveEdge guard absorbs a
-  // replayed idle=true). The timeout binding may only change while the
+  // (they replay current idle state; the seenActiveEdge guard + grace timer
+  // absorb a replayed idle=true). The timeout binding may only change while the
   // monitor is DISABLED (impl destroyed) — rearmIdleMonitor() enforces the
   // dance for config edits; a timeout change on a live monitor also kills it.
   property bool idleMonitorGate: false // the actual enabled binding
@@ -137,12 +138,14 @@ Item {
   onIdleMonitorWantedChanged: {
     if (!idleMonitorWanted) {
       seenActiveEdge = false
+      idleGraceTimer.stop()
       idleMonitorGate = false
     } else
       idleRearmTimer.restart()
   }
   function rearmIdleMonitor() {
     root.seenActiveEdge = false
+    idleGraceTimer.stop()
     idleMonitorGate = false
     idleRearmTimer.restart()
   }
@@ -156,6 +159,32 @@ Item {
     onTriggered: root.idleMonitorGate = root.idleMonitorWanted
   }
 
+  // Arming-grace timer (fix for "shell reloaded while the seat is already
+  // idle"). The protocol only exposes idle EDGES, not duration, so at arm
+  // time we cannot tell "user is away" from "user is right there". Instead of
+  // ignoring a replayed idle=true outright (which stranded a restart made
+  // while the user was away), we start a full idleSeconds grace period: if no
+  // real activity edge arrives before it expires, the user was idle the whole
+  // time and we show; any activity cancels it and arms seenActiveEdge
+  // normally. The ssh-config-edit protection is intact: there is always a
+  // full idleSeconds window between an arm and any show.
+  Timer {
+    id: idleGraceTimer
+    interval: root.idleSeconds * 1000
+    running: false
+    repeat: false
+    onTriggered: {
+      // still-armed, still-gated, still-idle, and not somehow already shown
+      if (!root.idleMonitorGate || !idleMonitor.isIdle || root.overlayVisible) return
+      root.seenActiveEdge = true // act like a normal observed idle edge from here on
+      console.log("overlay-screensaver: grace expired on already-idle arm; showing (mode=" + root.configuredAutoMode + ")")
+      if (root.configuredAutoMode === "image")
+        root.show("idle")
+      else
+        root.showShader(root.configuredShader, "idle")
+    }
+  }
+
   IdleMonitor {
     id: idleMonitor
     enabled: root.idleMonitorGate
@@ -165,10 +194,17 @@ Item {
       console.log("overlay-screensaver: idle=" + idleMonitor.isIdle
         + " armed=" + root.seenActiveEdge + " auto=" + root.autoEnabled + " mode=" + root.configuredAutoMode)
       if (!idleMonitor.isIdle) {
+        idleGraceTimer.stop() // real activity: grace over, arm normally
         root.seenActiveEdge = true // observed activity; we may auto-show next idle
         return
       }
-      if (!root.seenActiveEdge) return // armed on first activity edge, never at load
+      if (!root.seenActiveEdge) {
+        // Replayed idle at arm time (shell reload / enable flip on an already-
+        // idle seat): start the grace timer instead of doing nothing. A user
+        // actually present produces an activity edge long before it expires.
+        idleGraceTimer.restart()
+        return
+      }
       if (!root.overlayVisible)
         if (root.configuredAutoMode === "image")
           root.show("idle")

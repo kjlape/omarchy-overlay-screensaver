@@ -23,8 +23,9 @@
 > auto-show (opt-in, `autoShow` + `enable`), off/hold flag files, stay-awake
 > awareness (read-only), own-config `FileView`+`JsonAdapter`, `Qt.BlankCursor`,
 > Qt motion dismissal replacing the `hyprctl cursorpos` poll. Verified live:
-> auto-show fires on a real activity→idle edge, replayed idle at arm is
-> ignored, `qs ipc` status carries the gates. §5 Variant S (systemd unit,
+> auto-show fires on a real activity→idle edge; a replayed idle at arm only
+> starts the arming-grace timer (never an instant show), `qs ipc` status
+> carries the gates. §5 Variant S (systemd unit,
 > own process) remains unbuilt. One hard-won gotcha not visible in the design:
 > quickshell 0.3.1 recreates the underlying idle-notification object when
 > `timeout` changes, and the QML `isIdle` property silently stops updating
@@ -77,8 +78,10 @@ IdleMonitor {
   timeout: root.idleSeconds
   respectInhibitors: true                 // standard seat idle-inhibition
   onIsIdleChanged: {
-    if (!screensaverIdle.isIdle) { root.seenActiveEdge = true; return }
-    if (!root.seenActiveEdge) return      // started while already idle → ignore
+    if (!screensaverIdle.isIdle) {        // activity: cancel grace, arm normally
+      idleGraceTimer.stop(); root.seenActiveEdge = true; return }
+    if (!root.seenActiveEdge) {           // replayed idle at arm: start grace
+      idleGraceTimer.restart(); return }  // (full idleSeconds window, see below)
     if (!root.overlayVisible) root.showShader(root.configuredShader, "idle")
   }
 }
@@ -93,11 +96,24 @@ timeout. No cycle timers, no grace timers, no window counting.
 true.** An overlay that can appear at load time is an overlay that can cover a
 screen you are not looking at (shell/daemon restart over ssh while the machine
 sits idle). `seenActiveEdge` requires one observed activity→idle *transition*
-per process lifetime before it will ever auto-show, so a restart while unattended
-is always a no-op — same fail-safe spirit as `visible: false` at start. Whether
-`ext-idle-notify` even *can* report `idled` immediately on bind is unknown
-(the protocol has no initial hint event, only `idled`/`resumed`); the guard makes
-the question moot instead of assuming an answer. **[verify anyway — checklist 1]**
+per process lifetime before it will ever auto-show on a live edge.
+
+**Refinement (implemented): the arming-grace timer.** The naive guard had a
+real cost: a shell restart made while the seat was ALREADY idle replayed
+`idle=true` at arm, got swallowed by the guard, and the overlay then never
+fired — even hours later — until the user produced some input. Since the
+protocol exposes only edges (no idle duration), the fix is a one-shot
+`idleGraceTimer` of exactly `idleSeconds` started whenever `idle=true` arrives
+while unarmed: any real activity edge cancels it (and arms normally); if it
+expires with no activity, the seat was idle the entire window and we show.
+Every path to a show therefore still includes a full, observed `idleSeconds`
+of genuine seat-idleness after the arm — the ssh-restart-while-away fail-safe
+survives (a restart while unattended just means the overlay appears one
+`idleSeconds` later, which is correct), while a restart onto an idle seat no
+longer strands the auto-show. Whether `ext-idle-notify` even *can* report
+`idled` immediately on bind is unknown (the protocol has no initial hint
+event, only `idled`/`resumed`); the grace timer makes the question moot
+instead of assuming an answer. **[verify anyway — checklist 1]**
 
 `respectInhibitors: true` buys the honest, portable version of "don't screensave
 while something is happening": any app that creates a `zwp_idle_inhibitor_v1`

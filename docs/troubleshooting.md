@@ -138,8 +138,9 @@ via `enabled` only.** A monitor instantiated mid-session (Loader `active`
 flip) has a dead `isIdle` even when it exists and is enabled — verified in
 the live shell by adding a statically-created monitor next to the Loader one:
 the static one fired, the Loader one never did. Enable/disable flips are safe
-(they replay current idle state, which the `seenActiveEdge` arming guard
-absorbs) — but the `timeout` binding may only change while the monitor is
+(they replay current idle state, which the `seenActiveEdge` arming guard plus
+the `idleGraceTimer` absorb — a replayed idle=true only starts a fresh full
+`idleSeconds` grace window, it never shows instantly) — but the `timeout` binding may only change while the monitor is
 disabled; config edits go through a disable → reload → re-arm dance
 (`rearmIdleMonitor`) so the impl is reborn with the correct timeout.
 Never arm before the config's `idleSeconds` is actually parsed: gate on the
