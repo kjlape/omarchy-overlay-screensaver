@@ -59,6 +59,8 @@ Item {
 
   property bool overlayVisible: false
   property string imagePath: ""
+  property string previousImagePath: "" // outgoing image during a wallpaper crossfade
+  readonly property int crossfadeMs: 800
 
   // ---- autonomous idle mode (moonshots/standalone-idle-mode.md) ----
   // Opt-in auto-activation: everything defaults OFF. The IdleMonitor, the
@@ -255,9 +257,18 @@ Item {
   // Config image wins; otherwise resolve the current background once on load.
   readonly property string configuredImage: String(cfg("image", "")).trim()
 
+  // All imagePath writes go through here so a wallpaper change mid-show
+  // crossfades: the outgoing image stays put underneath while the new one
+  // fades in on top (see the Image pair in the PanelWindow).
+  function setImage(p) {
+    if (p === root.imagePath) return
+    root.previousImagePath = root.imagePath
+    root.imagePath = p
+  }
+
   function refreshImage() {
     if (root.configuredImage !== "") {
-      root.imagePath = root.configuredImage
+      root.setImage(root.configuredImage)
       return
     }
     if (!readlinkProc.running) readlinkProc.running = true
@@ -376,7 +387,7 @@ Item {
     stdout: StdioCollector {
       onStreamFinished: {
         var p = String(text || "").trim()
-        if (p !== "") root.imagePath = p
+        if (p !== "") root.setImage(p)
       }
     }
   }
@@ -594,12 +605,42 @@ Item {
       WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
       exclusionMode: ExclusionMode.Ignore
 
-      Image {
+      // Image mode with a crossfade on wallpaper change: the outgoing image
+      // sits underneath (kept opaque), the incoming one fades in on top once
+      // it has decoded. First show fades up from black; after each fade the
+      // outgoing path is dropped so its texture can be freed.
+      Item {
         anchors.fill: parent
-        source: root.imagePath !== "" ? ("file://" + root.imagePath) : ""
-        fillMode: Image.PreserveAspectCrop
-        asynchronous: true
         visible: root.contentMode === "image" && root.imagePath !== ""
+
+        Image {
+          anchors.fill: parent
+          source: root.previousImagePath !== "" ? ("file://" + root.previousImagePath) : ""
+          fillMode: Image.PreserveAspectCrop
+          asynchronous: true
+          opacity: crossfadeAnim.running ? 0 : 1
+        }
+
+        Image {
+          id: incomingImage
+          anchors.fill: parent
+          source: root.imagePath !== "" ? ("file://" + root.imagePath) : ""
+          fillMode: Image.PreserveAspectCrop
+          asynchronous: true
+          opacity: 0
+          // Reset to 0 on every new source — without this the image keeps
+          // opacity 1 from the previous fade and the next crossfade is a
+          // hard swap (the fade has nothing left to animate).
+          onSourceChanged: opacity = 0
+          onStatusChanged: if (status === Image.Ready) opacity = 1
+          Behavior on opacity {
+            NumberAnimation {
+              id: crossfadeAnim
+              duration: root.crossfadeMs
+              onStopped: root.previousImagePath = ""
+            }
+          }
+        }
       }
 
       // Ported xscreensaver GLSL hack, rendered in-process on the same
