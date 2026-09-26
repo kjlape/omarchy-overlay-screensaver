@@ -20,6 +20,7 @@ handler.
 │  ├── Variants { model: Quickshell.screens }                  │
 │  │     └── PanelWindow per monitor  ← the overlay surfaces    │
 │  └── Process: readlink current background (image fallback)    │
+│  └── FileView: watch current/ dir → re-resolve background     │
 └──────────────────────────────────────────────────────────────┘
         ▲                                   │
         │ IPC socket                        │ Wayland layer-shell
@@ -73,7 +74,11 @@ the `@` prefix omarchy uses for some references). Currently two keys:
 
 - `image` — absolute path to the overlay image. Falls back to the
   current background via `readlink -f ~/.local/state/omarchy/current/background`
-  (the same symlink `omarchy.background` follows).
+  (the same symlink `omarchy.background` follows). In fallback mode the
+  path is re-resolved live on wallpaper changes: a `FileView` watches the
+  `current/` parent directory (the symlink is atomically replaced, so the
+  file itself can't be watched directly) and calls `refreshImage()`.
+  A configured `image` path is static and never followed.
 - `shader` — name of the GLSL hack used as the **default** by
   `showShader`/the `shader` CLI verb when no name argument is passed
   (default `starnest`). An explicit name argument always wins; unknown

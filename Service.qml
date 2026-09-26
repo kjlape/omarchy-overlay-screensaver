@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+// (FileView is in Quickshell core, no extra import needed)
 
 // MVP validation of the overlay-screensaver direction: a layer-shell surface
 // on WlrLayer.Top, which Hyprland stacks above ALL toplevels — fullscreen
@@ -378,6 +379,18 @@ Item {
         if (p !== "") root.imagePath = p
       }
     }
+  }
+
+  // Live-update: omarchy's wallpaper timer repoints the current/background
+  // symlink (atomically — a FileView on the link itself can miss that, same
+  // gotcha as the config dir watcher below), so watch the parent directory
+  // and re-resolve on any change.
+  FileView {
+    id: backgroundWatcher
+    path: String(root.backgroundLink).split("/").slice(0, -1).join("/")
+    watchChanges: true
+    printErrors: false
+    onFileChanged: Qt.callLater(root.refreshImage) // defer past inotify churn
   }
 
   // Grace window after each show: map delivers synthetic motion/enter under a
