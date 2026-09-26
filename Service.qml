@@ -25,11 +25,15 @@ import Quickshell.Wayland
 // A standalone config file takes LOWER precedence (injected plugins[] entry
 // wins): $XDG_CONFIG_HOME/overlay-screensaver/config.json — see
 // moonshots/standalone-idle-mode.md §3. Keys: autoShow, idleSeconds, shader,
-// image, fps, respectOmarchyStayAwake.
+// image, fps, respectOmarchyStayAwake, autoMode, configOverrides.
 // With no `image`, falls back to the current omarchy background.
 // `shader` selects the DEFAULT ported xscreensaver GLSL hack (see shaders/)
 // used by `showShader`/the `shader` CLI verb when no name is passed; an
 // explicit name argument always wins (`shader universeball`).
+// `configOverrides` is an optional array of JSON file paths (e.g., 
+// "/.local/state/omarchy/current/theme/overlay-screensaver.json"); the
+// config files are merged in order, with later files overriding earlier ones
+// on a per-key basis.
 //
 // Autonomous idle mode (opt-in, default OFF): with autoShow enabled and the
 // stock omarchy screensaver turned off (`omarchy toggle screensaver`), the
@@ -233,6 +237,16 @@ Item {
     if (v === undefined || v === null) {
       var a = configFile.adapter
       if (a) v = a[name]
+    }
+    // Check override adapters (last file wins)
+    if (v === undefined || v === null) {
+      for (var i = root.overrideAdapters.length - 1; i >= 0; i--) {
+        var ov = root.overrideAdapters[i]
+        if (ov && ov.adapter && ov.adapter.hasOwnProperty(name)) {
+          v = ov.adapter[name]
+          break
+        }
+      }
     }
     return (v === undefined || v === null || v === "") ? fallback : v
   }
@@ -442,7 +456,10 @@ Item {
     path: root.configHome + "/overlay-screensaver"
     watchChanges: true
     printErrors: false
-    onFileChanged: if (!configProbe.running) configProbe.running = true
+    onFileChanged: {
+      if (!configProbe.running) configProbe.running = true
+      if (!reloadTimer.running) reloadTimer.restart()
+    }
   }
 
   // editors often replace the file (new inode), which kills the per-file
@@ -492,6 +509,35 @@ Item {
       property string shader: ""
       property string image: ""
       property string autoMode: "shader"
+      // Optional array of JSON config file paths to merge (e.g., theme presets).
+      // Each file is a plain object; later files override earlier ones.
+      property var configOverrides: []
+    }
+  }
+
+  // Override config file adapters: loaded from paths in configOverrides
+  // Last file wins on a per-key basis.
+  property var overrideAdapters: []
+
+  function loadOverrideConfigs() {
+    // Clear existing override adapters
+    root.overrideAdapters = []
+    var overrides = configFile.adapter && configFile.adapter.configOverrides ? configFile.adapter.configOverrides : []
+    for (var i = 0; i < overrides.length; i++) {
+      var path = String(overrides[i]).trim()
+      if (path === "") continue
+      // Create FileView for each override config
+      var ovFile = Qt.createQmlObject(
+        "FileView {\n        path: '" + path + "'\n        watchChanges: true\n        printErrors: false\n        adapter: JsonAdapter {}\n      }",
+        root
+      )
+      // Push loaded adapters to the list after they're loaded
+      ovFile.onLoaded = function() {
+        root.overrideAdapters.push(ovFile.adapter)
+      }
+      if (ovFile === null) {
+        console.log("overlay-screensaver: failed to load override config " + path)
+      }
     }
   }
 
@@ -596,9 +642,18 @@ Item {
   }
 
   Component.onCompleted: {
+    loadOverrideConfigs()
     refreshImage()
     ownStateProbe.running = true
     stayAwakeProbe.running = true
     configProbe.running = true
+  }
+
+  Timer {
+    id: reloadTimer
+    interval: 150
+    running: false
+    repeat: false
+    onTriggered: loadOverrideConfigs()
   }
 }
