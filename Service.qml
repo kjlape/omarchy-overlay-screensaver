@@ -1,4 +1,6 @@
 import QtQuick
+import QtQuick.Effects
+import QtQuick.Shapes
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -58,9 +60,18 @@ Item {
   readonly property string backgroundLink: home + "/.local/state/omarchy/current/background"
 
   property bool overlayVisible: false
-  property string imagePath: ""
-  property string previousImagePath: "" // outgoing image during a wallpaper crossfade
-  readonly property int crossfadeMs: 800
+  // Image-mode wallpaper transition: a diagonal wipe from screen-center,
+  // ported from omarchy.background's own transition (see Background.qml
+  // in the shell source) so a wallpaper change while the overlay is up
+  // matches the desktop's own transition instead of a plain crossfade.
+  property string imagePath: ""            // current/target image (final)
+  property string displayedImagePath: ""   // base layer actually composited
+  property string incomingImagePath: ""    // image being wiped in on top
+  property string oldImagePath: ""         // image being wiped out underneath
+  property bool imageFinishingTransition: false
+  property int imageVersion: 0
+  property int imageRevealStartedVersion: -1
+  property real imageRevealProgress: 1
 
   // ---- autonomous idle mode (moonshots/standalone-idle-mode.md) ----
   // Opt-in auto-activation: everything defaults OFF. The IdleMonitor, the
@@ -294,12 +305,30 @@ Item {
   readonly property string configuredImage: String(cfg("image", "")).trim()
 
   // All imagePath writes go through here so a wallpaper change mid-show
-  // crossfades: the outgoing image stays put underneath while the new one
-  // fades in on top (see the Image pair in the PanelWindow).
-  function setImage(p) {
-    if (p === root.imagePath) return
-    root.previousImagePath = root.imagePath
+  // wipes: the outgoing image stays put underneath while the new one is
+  // revealed on top through a diagonal band that grows from the screen
+  // center (see the Image trio in the PanelWindow, and imageRevealAnimation
+  // below) — the same transition omarchy.background itself uses.
+  function setImage(p, instant) {
+    p = String(p || "").trim()
+    if (!p || p === root.imagePath) return
     root.imagePath = p
+    root.imageVersion += 1
+    root.imageRevealStartedVersion = -1
+    imageRevealAnimation.stop()
+    root.imageFinishingTransition = false
+
+    if (instant) {
+      root.oldImagePath = ""
+      root.incomingImagePath = ""
+      root.displayedImagePath = p
+      root.imageRevealProgress = 1
+      return
+    }
+
+    root.oldImagePath = root.displayedImagePath
+    root.incomingImagePath = p
+    root.imageRevealProgress = 0
   }
 
   function refreshImage() {
@@ -308,6 +337,34 @@ Item {
       return
     }
     if (!readlinkProc.running) readlinkProc.running = true
+  }
+
+  // Starts the shared reveal animation once (guarded by imageVersion so a
+  // second monitor's mask-ready doesn't restart it), and flags that specific
+  // PanelWindow's incoming layer as safe to show under its mask.
+  function startImageReveal(panel) {
+    if (!root.incomingImagePath) return
+    panel.imageMaskReady = true
+    if (root.imageRevealStartedVersion === root.imageVersion) return
+    root.imageRevealStartedVersion = root.imageVersion
+    imageRevealAnimation.restart()
+  }
+
+  NumberAnimation {
+    id: imageRevealAnimation
+    target: root
+    property: "imageRevealProgress"
+    from: 0
+    to: 1
+    duration: 420
+    easing.type: Easing.InOutCubic
+    onFinished: {
+      if (root.incomingImagePath) {
+        root.displayedImagePath = root.imagePath || root.incomingImagePath
+        root.imageFinishingTransition = true
+      }
+      root.imageRevealProgress = 1
+    }
   }
 
   // Map a requested shader name to a known one. Empty/missing request falls
@@ -641,40 +698,118 @@ Item {
       WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
       exclusionMode: ExclusionMode.Ignore
 
-      // Image mode with a crossfade on wallpaper change: the outgoing image
-      // sits underneath (kept opaque), the incoming one fades in on top once
-      // it has decoded. First show fades up from black; after each fade the
-      // outgoing path is dropped so its texture can be freed.
+      // Image mode with a diagonal wipe on wallpaper change, matching
+      // omarchy.background's own transition: the outgoing image sits
+      // underneath, the incoming one is revealed on top through a slanted
+      // band (revealMask) that grows outward from the screen center. Ported
+      // from /usr/share/omarchy/shell/plugins/background/Background.qml.
       Item {
+        id: imageContent
         anchors.fill: parent
-        visible: root.contentMode === "image" && root.imagePath !== ""
+        visible: root.contentMode === "image"
+          && (root.displayedImagePath !== "" || root.incomingImagePath !== "")
 
-        Image {
-          anchors.fill: parent
-          source: root.previousImagePath !== "" ? ("file://" + root.previousImagePath) : ""
-          fillMode: Image.PreserveAspectCrop
-          asynchronous: true
-          opacity: crossfadeAnim.running ? 0 : 1
+        property bool imageMaskReady: false
+
+        function maybeStartImageReveal() {
+          if (!root.incomingImagePath || root.imageRevealProgress !== 0 || imageMaskReady) return
+          if (incomingImageFrame.status !== Image.Ready) return
+          Qt.callLater(function() {
+            if (!root.incomingImagePath || root.imageRevealProgress !== 0 || imageMaskReady) return
+            if (incomingImageFrame.status !== Image.Ready) return
+            root.startImageReveal(imageContent)
+          })
         }
 
         Image {
-          id: incomingImage
+          id: baseImage
           anchors.fill: parent
-          source: root.imagePath !== "" ? ("file://" + root.imagePath) : ""
+          source: root.displayedImagePath !== "" ? ("file://" + root.displayedImagePath) : ""
           fillMode: Image.PreserveAspectCrop
           asynchronous: true
-          opacity: 0
-          // Reset to 0 on every new source — without this the image keeps
-          // opacity 1 from the previous fade and the next crossfade is a
-          // hard swap (the fade has nothing left to animate).
-          onSourceChanged: opacity = 0
-          onStatusChanged: if (status === Image.Ready) opacity = 1
-          Behavior on opacity {
-            NumberAnimation {
-              id: crossfadeAnim
-              duration: root.crossfadeMs
-              onStopped: root.previousImagePath = ""
+          cache: true
+          onStatusChanged: {
+            if (status === Image.Ready && root.imageFinishingTransition) {
+              root.incomingImagePath = ""
+              root.oldImagePath = ""
+              root.imageFinishingTransition = false
             }
+          }
+        }
+
+        Image {
+          id: oldImageFrame
+          anchors.fill: parent
+          source: root.oldImagePath !== "" ? ("file://" + root.oldImagePath) : ""
+          fillMode: Image.PreserveAspectCrop
+          asynchronous: true
+          cache: false
+          smooth: true
+          mipmap: true
+          visible: root.oldImagePath !== "" && root.imageRevealProgress < 1
+          onStatusChanged: imageContent.maybeStartImageReveal()
+        }
+
+        Item {
+          id: incomingImageLayer
+          anchors.fill: parent
+          visible: root.incomingImagePath !== "" && incomingImageFrame.status === Image.Ready
+            && (root.imageRevealProgress >= 1 || imageContent.imageMaskReady)
+          layer.enabled: root.incomingImagePath !== "" && root.imageRevealProgress < 1
+          layer.smooth: true
+          layer.effect: MultiEffect {
+            maskEnabled: true
+            maskSource: imageRevealMask
+            maskThresholdMin: 0.5
+            maskSpreadAtMin: 0.02
+          }
+
+          Image {
+            id: incomingImageFrame
+            anchors.fill: parent
+            source: root.incomingImagePath !== "" ? ("file://" + root.incomingImagePath) : ""
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            cache: false
+            smooth: true
+            mipmap: true
+            onStatusChanged: imageContent.maybeStartImageReveal()
+          }
+        }
+
+        Item {
+          id: imageRevealMask
+          anchors.fill: parent
+          visible: false
+          layer.enabled: true
+
+          readonly property real slant: -0.18
+          readonly property real centerTop: width / 2 - slant * height / 2
+          readonly property real centerBottom: width / 2 + slant * height / 2
+          readonly property real reach: width / 2 + Math.abs(slant) * height / 2 + 4
+          readonly property real spread: reach * root.imageRevealProgress
+
+          Shape {
+            anchors.fill: parent
+            antialiasing: true
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+              fillColor: "white"
+              strokeColor: "transparent"
+              startX: imageRevealMask.centerTop - imageRevealMask.spread; startY: 0
+              PathLine { x: imageRevealMask.centerTop + imageRevealMask.spread; y: 0 }
+              PathLine { x: imageRevealMask.centerBottom + imageRevealMask.spread; y: imageRevealMask.height }
+              PathLine { x: imageRevealMask.centerBottom - imageRevealMask.spread; y: imageRevealMask.height }
+              PathLine { x: imageRevealMask.centerTop - imageRevealMask.spread; y: 0 }
+            }
+          }
+        }
+
+        Connections {
+          target: root
+          function onIncomingImagePathChanged() {
+            imageContent.imageMaskReady = false
+            imageContent.maybeStartImageReveal()
           }
         }
       }
