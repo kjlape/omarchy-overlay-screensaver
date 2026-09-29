@@ -207,7 +207,8 @@ unknown names are rejected without showing anything. Current ports:
   `xmatrix.frag`.
 
 GLSL sources live in `shaders/`; the baked `.qsb` files are rebuilt with
-`/usr/lib/qt6/bin/qsb --glsl "100,120,150,330,440" <in> -o <in>.qsb`.
+`tools/bake-shaders.sh <name>` (the single place the `qsb` GLSL version
+list is defined).
 See [docs/roadmap.md](docs/roadmap.md) for the full porting plan, recipe,
 and the porting-tips list (coordinate conversion, testing loop) learned
 from the ports so far.

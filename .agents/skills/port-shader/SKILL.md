@@ -62,11 +62,13 @@ named a shader, use that one.
 ## Bake, register, reload
 
 ```bash
-/usr/lib/qt6/bin/qsb --glsl "100,120,150,330,440" shaders/<name>.frag -o shaders/<name>.frag.qsb
-/usr/lib/qt6/bin/qsb --glsl "100,120,150,330,440" shaders/<name>.vert -o shaders/<name>.vert.qsb
+tools/bake-shaders.sh <name>   # bakes frag + vert, verifies ES variants
 ```
 (qsb catches typos in seconds — bake immediately after writing.)
 Commit the `.qsb` files; `qsb` isn't guaranteed on install machines.
+Do not inline the raw `qsb --glsl ...` command — the GLSL version list lives
+only in `tools/bake-shaders.sh` (GLSL ES targets are mandatory; see
+`bugs/overlay-screensaver-shaders-gles.md`).
 
 Then the **only** Service.qml change — one line in `knownShaders`:
 `"<name>": "shaders/<name>.frag.qsb",` (append, keep the map valid).

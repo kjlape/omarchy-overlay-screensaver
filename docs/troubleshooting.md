@@ -184,3 +184,24 @@ instead of triggering the timeout-recreation bug above.
    scratch quickshell above); restart the shell if it doesn't.
 5. Still failing after a clean restart ⇒ real QML error; fix, sync the
    installed copy, restart again.
+
+## Blank shader overlay + `No GLSL shader code found` in the journal
+
+If a shader show puts the overlay up but draws nothing, and the journal
+(`wayland-wm@hyprland.desktop.service`) floods with:
+
+```
+WARN: No GLSL shader code found (versions tried: QList(320, 310, 300, 100))
+```
+
+the `.qsb` is missing GLSL ES variants — Qt got an OpenGL ES context and
+there is no matching stage to link. Root cause + investigation:
+`bugs/overlay-screensaver-shaders-gles.md`.
+
+Fix: re-bake with `tools/bake-shaders.sh` — it targets `300es,310es,320es`
+plus the desktop versions and verifies each `.qsb` actually contains the ES
+variants (see the script header; `100es` is deliberately excluded).
+
+Note: `tools/shadercheck.qml` runs with `QT_QUICK_BACKEND=opengl`, which
+gets desktop GL — it **cannot** catch a missing-ES bake. Only the journal
+warning (or a real ES machine) reveals it.

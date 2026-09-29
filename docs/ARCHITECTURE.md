@@ -139,8 +139,10 @@ Moving parts, all of which cost debugging time — copy this recipe:
 
 - **Shaders live in `shaders/`** as Vulkan-style GLSL sources, baked to
   `.qsb` by qt6-shadertools. Rebuild after editing:
-  `/usr/lib/qt6/bin/qsb --glsl "100,120,150,330,440" shaders/<name>.frag -o shaders/<name>.frag.qsb`
-  (baked `.qsb` files are committed — `qsb` isn't guaranteed on install
+  `tools/bake-shaders.sh <name>` — the single place the `qsb` GLSL
+  version list is defined (includes GLSL ES targets; see
+  `bugs/overlay-screensaver-shaders-gles.md`). Do not inline `qsb`
+  commands. (baked `.qsb` files are committed — `qsb` isn't guaranteed on install
   machines). A QML-source `fragmentShader:` needs the built file, not the
   raw GLSL.
 - **The registry is `knownShaders` in Service.qml** — name → frag `.qsb`

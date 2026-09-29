@@ -137,7 +137,10 @@ idiom-golf unpacking). The condensed loop, verified working:
 3. Copy any existing `shaders/<name>.vert` (passthrough; NVIDIA linker
    requires the explicit-location output — never rely on Qt's default).
 4. Bake **immediately** (`qsb` catches typos in seconds):
-   `/usr/lib/qt6/bin/qsb --glsl "100,120,150,330,440" shaders/<name>.frag -o shaders/<name>.frag.qsb` (same for `.vert`).
+   `tools/bake-shaders.sh <name>` — the single place the GLSL version list
+   lives (includes the GLSL ES targets some machines need; see
+   `bugs/overlay-screensaver-shaders-gles.md`). Do not inline `qsb`
+   commands in docs or shells.
    Commit the `.qsb` files — `qsb` isn't guaranteed on install machines.
 5. Add one line to `knownShaders` in `Service.qml` — that's the only QML
    change a port needs.

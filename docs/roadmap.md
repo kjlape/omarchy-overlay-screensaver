@@ -34,10 +34,9 @@ The "run all 270 hacks" moonshot via Xvfb is tracked separately under `moonshots
    - Uniforms: `time` (seconds), `aspect` (w/h)
    - Output: `fragColor`
    - Add minimal vertex stage (`qt_TexCoord0` passthrough)
-3. Bake both stages with `qsb`:
+3. Bake both stages with `qsb` (one command):
    ```bash
-   qsb --glsl shaders/<name>.frag -o shaders/<name>.frag.qsb
-   qsb --glsl shaders/<name>.vert -o shaders/<name>.vert.qsb
+   tools/bake-shaders.sh <name>   # bakes frag + vert, verifies ES variants
    ```
 4. Register in `Service.qml` `knownShaders` map
 5. Test: `omarchy-overlay-screensaver shader <name>`
@@ -136,9 +135,8 @@ For each of the remaining 31 programs (vendored at
              with a texture between passes, or merge into one pass if feasible
        - Texture-channel users: supply textures via QML source properties
              or strip the texture dependency
-[ ] 4. Bake: qsb --glsl "100,120,150,330,440" shaders/<name>.frag -o shaders/<name>.frag.qsb
-[ ] 5. Bake: qsb --glsl "100,120,150,330,440" shaders/<name>.vert -o shaders/<name>.vert.qsb
-[ ] 6. Add to knownShaders in Service.qml:
+[ ] 4. Bake both stages: tools/bake-shaders.sh <name>
+[ ] 5. Add to knownShaders in Service.qml:
        readonly property var knownShaders: ({ ..., "<name>": "shaders/<name>.frag.qsb" })
        (that's the ONLY Service.qml change — the ShaderEffect resolves stages
        dynamically from shaderName via activeFragUrl/activeVertUrl)
@@ -428,7 +426,7 @@ void main() {
        - vec2 res = iResolution → float aspect = width / height;  (passed from QML)
        - Remove iMouse usage or replace with time-derived value
 [ ] 5. Create shaders/<slug>.vert (4 lines above)
-[ ] 6. Bake both: qsb --glsl "100,120,150,330,440" shaders/<slug>.frag -o shaders/<slug>.frag.qsb
+[ ] 6. Bake both: tools/bake-shaders.sh <slug>
 [ ] 7. Register in Service.qml knownShaders (only change needed)
 [ ] 8. Test: omarchy-overlay-screensaver shader <slug>
 ```
@@ -527,9 +525,8 @@ VERTEX
   # Copy frag (no edits) — user will need to review
   cp "$f" "$OUTPUT_DIR/${slug}.frag"
 
-  # Bake both
-  /usr/lib/qt6/bin/qsb --glsl "$OUTPUT_DIR/${slug}.frag" -o "$OUTPUT_DIR/${slug}.frag.qsb"
-  /usr/lib/qt6/bin/qsb --glsl "$OUTPUT_DIR/${slug}.vert" -o "$OUTPUT_DIR/${slug}.vert.qsb"
+  # Bake both (frag + vert, verifies ES variants present)
+  /path/to/repo/tools/bake-shaders.sh "$slug"
 
   echo "Processed: $slug"
 done
